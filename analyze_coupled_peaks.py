@@ -1,23 +1,18 @@
-import itertools
 import collections
+import itertools
+
+import intervaltree
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy
 import pandas
 import scipy
 import scipy.signal
-import matplotlib
-import matplotlib.pyplot as plt
 import seaborn
-
-import intervaltree
-
-import call_coupled_peaks
-from pgtools import genomicwrappers
-from pgtools import toolbox
-from pgtools.toolbox import log_print
-from pgtools import motiftools
 from pgtools import myplots
-import genomicoverlaps2
+from pgtools import toolbox
 from pgtools.genomicwrappers import GENE_TYPES, COMPONENT_TYPES
+from pgtools.toolbox import log_print
 
 DEFAULT_GENOME = object()
 NUM_ARC_POINTS = 200
