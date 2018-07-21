@@ -1,3 +1,5 @@
+import gzip
+
 import intervaltree
 import matplotlib
 import matplotlib.pyplot as plt
@@ -6,10 +8,18 @@ import pandas
 import scipy
 import scipy.signal
 import seaborn
-from pgtools import toolbox
+
+from . import utilities
+from .intervaldict import IntervalDict
+from .utilities import log_print
 
 DEFAULT_ARC_POINTS = 200
 
+CHROMOSOME_DIALECT = 'ucsc'
+DEFAULT_FEATURE_SOURCES = {'ensembl', 'havana', 'ensembl_havana'}
+DEFAULT_GENE_TYPES = {'gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript'}
+DEFAULT_TRANSCRIPT_TYPES = {'transcript', 'lincRNA'}
+DEFAULT_COMPONENT_TYPES = {'CDS', 'three_prime_UTR', 'five_prime_UTR'}
 
 def compute_half_arc_points(center, a, b, theta1, theta2, num_points=DEFAULT_ARC_POINTS):
     """
@@ -435,7 +445,15 @@ class VectorPlot(_BrowserSubPlot):
 #             plot_possibly_znormed(feature_cv)
 
 class GeneModels(_BrowserSubPlot):
-    def __init__(self, genome, label=None, color='k',
+    def __init__(self,
+                 gff3_filename,
+                 label='genes',
+                 color='k',
+                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dest='ucsc'),
+                 feature_sources=DEFAULT_FEATURE_SOURCES,
+                 gene_types=DEFAULT_GENE_TYPES,
+                 transcript_types=DEFAULT_TRANSCRIPT_TYPES,
+                 component_types=DEFAULT_COMPONENT_TYPES,
                  feature_height=0.12,
                  chevron_height=0.05,
                  chevron_width=0.04,
@@ -443,11 +461,13 @@ class GeneModels(_BrowserSubPlot):
                  truncation_size=0.10,
                  utr_endcap_width=0.04,
                  gene_name_fontsize=8):
+
         super(GeneModels, self).__init__()
 
         self.color = color
-        self.genome = genome
+        self.genome = gff3_filename
         self.label = label
+
         self.feature_height = feature_height  # in inches
         self.chevron_height = chevron_height  # in inches
         self.chevron_width = chevron_width  # in inches
@@ -455,6 +475,100 @@ class GeneModels(_BrowserSubPlot):
         self.truncation_size = truncation_size  # in inches
         self.utr_endcap_width = utr_endcap_width  # in inches
         self.gene_name_fontsize = gene_name_fontsize
+
+        self._load_gene_models(gff3_filename=gff3_filename, chromosome_name_converter=chromosome_name_converter,
+                               sources=feature_sources, gene_types=gene_types, transcript_types=transcript_types,
+                               component_types=component_types)
+
+    def _load_gene_models(self, gff3_filename, chromosome_name_converter, *, sources, gene_types,
+                          transcript_types, component_types):
+        """
+        Parse a GFF file, extract gene model information and store it in attributes.
+        """
+        gene_names_to_ensembl_ids = {}
+        genes = {}
+        transcripts = {}
+        components = {}
+        component_num = 0  # incrementing component id
+
+        # ToDo: Benchmark against using pandas or csv or BCBio.GFF if I can get it to run.
+        log_print('Loading gene model information from {}. This may take a few minutes ...'.format(gff3_filename))
+
+        if gff3_filename.endswith('.gz'):
+            gff_file_handle = gzip.open(gff3_filename, 'rt')
+        else:
+            gff_file_handle = open(gff3_filename, 'rt')
+
+        for line_num, line in enumerate(gff_file_handle):
+            if line_num == 0: assert line.split(' ')[0] == '##gff-version' and line.endswith(
+                '3\n'), 'This does not appear to be a GFF 3 file!'
+            # Parse non-headers
+            if line[0] != '#':
+                split_line = line.strip('\n').split('\t')
+                if len(split_line) < 7:
+                    print('Column error on line {}: {}'.format(line_num, split_line))
+
+                source, feature_type = split_line[1], split_line[2]
+
+                if source in sources:
+                    contig = chromosome_name_converter(split_line[0])
+                    start = int(split_line[3])
+                    end = int(split_line[4])
+                    strand = split_line[6]
+
+                    fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
+
+                    if feature_type in gene_types:
+                        ensembl_id = fields['ID']
+                        gene_name = fields['Name']
+                        assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
+                                                                                                        line_num)
+
+                        genes[ensembl_id] = {'contig': contig,
+                                             'start': start - 1,  # convert 1-based to 0-based
+                                             'end': end,
+                                             'strand': strand,
+                                             'transcripts': []}
+
+                        genes[ensembl_id].update(fields)
+                        if gene_name not in gene_names_to_ensembl_ids:
+                            gene_names_to_ensembl_ids[gene_name] = []
+                        gene_names_to_ensembl_ids[gene_name].append(ensembl_id)
+
+                    elif feature_type in transcript_types:
+                        parent = fields['Parent']
+                        if parent in genes:
+                            ensembl_id = fields['ID']
+                            transcripts[ensembl_id] = {'contig': contig,
+                                                       'start': start - 1,  # convert 1-based to 0-based
+                                                       'end': end,
+                                                       'strand': strand,
+                                                       'components': []}
+                            transcripts[ensembl_id].update(fields)
+
+                            genes[parent]['transcripts'].append(ensembl_id)
+
+                    elif feature_type in component_types:
+                        parent = fields['Parent']
+                        if parent in transcripts:
+                            if 'exon_id' in fields:
+                                ensembl_id = fields['exon_id']
+                            else:
+                                ensembl_id = str(component_num)
+                                component_num += 1
+
+                            components[ensembl_id] = {'contig': contig,
+                                                      'start': start - 1,  # convert 1-based to 0-based
+                                                      'end': end,
+                                                      'strand': strand,
+                                                      'type': feature_type}
+                            components[ensembl_id].update(fields)
+                            transcripts[parent]['components'].append(ensembl_id)
+
+        self.genes = IntervalDict(genes)
+        self.transcripts = IntervalDict(transcripts)
+        self.components = IntervalDict(components)
+        self.gene_names_to_ensembl_ids = gene_names_to_ensembl_ids
 
     @staticmethod
     def _arrange_genes(gene_data_list):
@@ -483,6 +597,7 @@ class GeneModels(_BrowserSubPlot):
 
     def plot(self, ax):
         # find overlapping genes
+        # ToDo: instead of intervaltrees, use intervaloverlaps module to answer these queries
         overlapping_genes = self.genome.genes.overlapping(self.chrom, self.ws, self.we)
         overlapping_components = self.genome.components.overlapping(self.chrom, self.ws, self.we)
 
@@ -522,7 +637,6 @@ class GeneModels(_BrowserSubPlot):
                         y=gene_num + feature_height_dt * 1.5,
                         s=gene_data['Name'],
                         ha='center',
-                        #                         rotation=10,
                         fontsize=self.gene_name_fontsize)
 
                 num_chevrons = int(max((visible_gene_end - visible_gene_start) / chevron_spacing_dt, 1))
@@ -534,7 +648,6 @@ class GeneModels(_BrowserSubPlot):
                     chevron_x_delta = chevron_width_dt
 
                 for chevron_idx in range(num_chevrons):
-                    #                     if num_chevrons =
                     chevron_x = visible_gene_start + chevron_idx * chevron_spacing_dt + chevron_remainder / 2
 
                     ax.plot((chevron_x, chevron_x + chevron_x_delta), (gene_num, gene_num + chevron_height_dt),
@@ -730,9 +843,9 @@ def visualize(plot_objects,
     span = we - ws
     xtick_increment = span / num_ticks
     rounding_increment = 5 * 10 ** numpy.round(numpy.log10(xtick_increment) - 1)
-    xtick_increment = toolbox.roundto(xtick_increment, rounding_increment)
+    xtick_increment = utilities.roundto(xtick_increment, rounding_increment)
     num_ticks = int(span / xtick_increment) + 1
-    round_start = toolbox.roundto(ws, rounding_increment)
+    round_start = utilities.roundto(ws, rounding_increment)
 
     seaborn.set_style(seaborn_style)
 

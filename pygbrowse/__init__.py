@@ -1,1 +1,1 @@
-from . import pygbrowse
+from . import plots
