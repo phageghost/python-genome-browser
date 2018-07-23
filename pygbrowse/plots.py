@@ -242,47 +242,7 @@ class InteractionPlot(_BrowserSubPlot):
                 ax.xaxis.set_ticks_position('top')
 
 
-class IntervalLines(_BrowserSubPlot):
-    # ToDo: Combine lines and box plot classes or superclass them
-    def __init__(self, named_crds, crd_cmap='Purples', crd_outline_color=None, linewidth=5):
-        """
-        Takes an iterable of tuples in the form:
-
-        (name, DataFrame)
-
-        to be plotted in order using the .plot() method.
-        """
-        super(IntervalLines, self).__init__()
-
-        self.named_crds = named_crds
-        min_val = min([crd_df['score'].min() for crdset_name, crd_df in named_crds])
-        max_val = max([crd_df['score'].max() for crdset_name, crd_df in named_crds])
-
-        self.crd_mapper = matplotlib.cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=min_val,
-                                                                                        vmax=max_val),
-                                                       cmap=crd_cmap)
-        self.crd_outline_color = crd_outline_color
-        self.linewidth = linewidth
-
-    def plot(self, ax):
-        for vertical_offset, (crdset_name, crd_df) in enumerate(self.named_crds):
-            for crd_name in crd_df.index:
-                start_loc = crd_df.loc[crd_name, 'chromStart']
-                end_loc = crd_df.loc[crd_name, 'chromEnd']
-                if start_loc <= self.we or end_loc >= self.ws:
-                    interval_color = self.crd_mapper.to_rgba(crd_df.loc[crd_name]['score'])
-                    ax.plot((start_loc,
-                             end_loc),
-                            (vertical_offset,
-                             vertical_offset),
-                            color=interval_color,
-                            linewidth=5)
-        ax.set_yticks(numpy.arange(len(self.named_crds)))
-        ax.set_yticklabels([crdset_name for crdset_name, crd_df in self.named_crds])
-        ax.set_ylim(-1, len(self.named_crds))
-
-
-class IntervalBoxes(_BrowserSubPlot):
+class BedPlot(_BrowserSubPlot):
     DEFAULT_PATCH_KWARGS = {'linewidth': 1, 'edgecolor': 'k'}
 
     def __init__(self, named_crds,
@@ -297,7 +257,7 @@ class IntervalBoxes(_BrowserSubPlot):
 
         to be plotted in order using the .plot() method.
         """
-        super(IntervalBoxes, self).__init__()
+        super(BedPlot, self).__init__()
 
         self.named_crds = named_crds[::-1]
         extent = max([numpy.abs(crd_df['score']).max() for crdset_name, crd_df in named_crds])
@@ -361,10 +321,10 @@ class IntervalBoxes(_BrowserSubPlot):
 #         ax.set_ylim(-1, len(self.named_crds))
 
 
-class VectorPlot(_BrowserSubPlot):
+class WigPlot(_BrowserSubPlot):
     def __init__(self, vector_series, label=None, color=None, center=False, scale=False, ylim=None,
                  convolution_kernel=None):
-        super(VectorPlot, self).__init__()
+        super(WigPlot, self).__init__()
         self.color = color
         self.vector = vector_series
         self.center = center
@@ -465,7 +425,6 @@ class GeneModels(_BrowserSubPlot):
         super(GeneModels, self).__init__()
 
         self.color = color
-        self.genome = gff3_filename
         self.label = label
 
         self.feature_height = feature_height  # in inches
@@ -598,8 +557,8 @@ class GeneModels(_BrowserSubPlot):
     def plot(self, ax):
         # find overlapping genes
         # ToDo: instead of intervaltrees, use intervaloverlaps module to answer these queries
-        overlapping_genes = self.genome.genes.overlapping(self.chrom, self.ws, self.we)
-        overlapping_components = self.genome.components.overlapping(self.chrom, self.ws, self.we)
+        overlapping_genes = self.genes.overlapping(self.chrom, self.ws, self.we)
+        overlapping_components = self.components.overlapping(self.chrom, self.ws, self.we)
 
         gene_display_levels = self._arrange_genes(overlapping_genes.values())
         ax.set_ylim((-0.5, len(gene_display_levels) - 1 + 0.5))
@@ -703,14 +662,14 @@ class GeneModels(_BrowserSubPlot):
                 # Identify components belonging to this gene
                 this_gene_components = set([])
                 for transcript_id in gene_data['transcripts']:
-                    for component_id in self.genome.transcripts[transcript_id]['components']:
+                    for component_id in self.transcripts[transcript_id]['components']:
                         if component_id in overlapping_components:
                             #                         print('\t' + component_id)
                             this_gene_components.add(component_id)
 
                 # plot components
                 for component_id in this_gene_components:
-                    component_data = self.genome.components[component_id]
+                    component_data = self.components[component_id]
                     #                     print('\t', component_id, component_data)
                     if ((component_data['start'] >= visible_gene_start) and (
                             component_data['start'] <= visible_gene_end)) or (
@@ -779,6 +738,7 @@ class GeneModels(_BrowserSubPlot):
 
                             ax.add_patch(utr_body)
                             ax.add_patch(utr_endcap)
+
                         elif component_data['type'] == 'CDS':
                             cds = matplotlib.patches.Rectangle(
                                 xy=(component_data['start'], gene_num - feature_height_dt),
@@ -787,7 +747,7 @@ class GeneModels(_BrowserSubPlot):
                                 facecolor=self.color)
                             ax.add_patch(cds)
 
-            ax.set_yticks(range(len(gene_display_levels)))
+            ax.set_yticks([])
 
 
 def compute_ax_row_positions(row_heights, ax_spacing=0.1):
@@ -832,6 +792,8 @@ def visualize(plot_objects,
     ws, we = int(ws), int(we)
 
     assert we > ws, 'Window end must be greater than window start! Got: {}, {}'.format(ws, we)
+
+    # if we receive a scalar here, use it as the height for all rows
     try:
         if len(row_heights) == 1:
             row_heights = row_heights * len(plot_objects)  # treat as a uniform row height
