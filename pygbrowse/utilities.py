@@ -1,6 +1,9 @@
 import datetime
 import os
 
+import numpy
+from scipy.stats import norm
+
 from . import romannumerals
 
 
@@ -77,6 +80,8 @@ def binary_search_tag_file(tag_filename, search_target):
     filesize = os.path.getsize(tag_filename)
     search_window_start = 0
     search_window_end = filesize - 1
+    guess_genomic_start = -1
+    guess = int((search_window_start + search_window_end) / 2)
 
     with open(tag_filename, 'rt') as tag_file:
         first_genomic_start = get_read_start(search_window_start)
@@ -92,19 +97,22 @@ def binary_search_tag_file(tag_filename, search_target):
             if guess_genomic_start == None:
                 return None
 
-            print(search_window_start, guess, search_window_end, guess_genomic_start)
+            # print(search_window_start, guess, search_window_end, guess_genomic_start)
 
             if guess_genomic_start < search_target:
-                print('\ttoo low!')
+                # print('\ttoo low!')
                 search_window_start = guess
 
             elif guess_genomic_start > search_target:
                 search_window_end = guess
 
-                print('\ttoo high!')
+                # print('\ttoo high!')
             else:
-                print('\tjust right!')
+                # print('\tjust right!')
                 break
+
+        if guess_genomic_start == -1:
+            return None
 
         if guess_genomic_start < search_target:
             guess += 1
@@ -114,7 +122,7 @@ def binary_search_tag_file(tag_filename, search_target):
         guess = tag_file.tell()
         thisline = tag_file.readline()
 
-        print('final:', guess, thisline)
+        # print('final:', guess, thisline)
 
         return guess
 
@@ -135,3 +143,24 @@ def log_print(message, tabs=1):
     :return:
     """
     print('{}{}{}'.format(pretty_now(), '\t' * tabs, message))
+
+
+def gaussian_kernel(sd, sd_cutoff=3, normalize=False):
+    """
+    Generate and return a numpy.Array whose elements are proportional to the PDF of a normal distribution
+    having standard deviation :param:`sd`.
+
+    :param sd:
+    :param sd_cutoff:
+    :param normalize:
+    :return:
+    """
+    bw = sd_cutoff * sd * 2 + 1
+    midpoint = sd_cutoff * sd
+    kern = numpy.zeros(bw)
+    frozen_rv = norm(scale=sd)
+    for i in range(bw):
+        kern[i] = frozen_rv.pdf(i - midpoint)
+    if normalize:
+        kern = kern / kern.max()
+    return kern

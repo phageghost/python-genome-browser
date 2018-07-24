@@ -161,22 +161,26 @@ def draw_arc_interaction(ax,
 
 class _BrowserSubPlot:
     def __init__(self):
-        self.chrom = None
-        self.ws = None
-        self.we = None
-        self.fig_width = None
-        self.row_height = None
+        # self.chrom = None
+        # self.ws = None
+        # self.we = None
+        # self.fig_width = None
+        # self.row_height = None
+        pass
 
-    def set_globals(self, chrom, ws, we, fig_width=64, row_height=4):
-        self.chrom = chrom
-        self.ws = ws
-        self.we = we
-        self.fig_width = fig_width
-        self.row_height = row_height
+    # def set_globals(self, chrom, ws, we, fig_width=64, row_height=4):
+    #     self.chrom = chrom
+    #     self.ws = ws
+    #     self.we = we
+    #     self.fig_width = fig_width
+    #     self.row_height = row_height
 
-    @property
-    def aspect_ratio(self):
-        return self.fig_width / self.row_height
+    # @property
+    # def aspect_ratio(self):
+    #     return self.fig_width / self.row_height
+
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        print('Stub method -- must be overridden by inheritors')
 
 
 class InteractionPlot(_BrowserSubPlot):
@@ -201,39 +205,38 @@ class InteractionPlot(_BrowserSubPlot):
         self.show_bin_centers = show_bin_centers
         self.thickness_column = thickness_column
 
-    def plot(self, ax):
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
         # Filter the interaction DataFrame to interactions with at least one anchor point within the visible window.
-        visible_interactions = self.interaction_df.loc[self.interaction_df['chr1'] == self.chrom]
+        visible_interactions = self.interaction_df.loc[self.interaction_df['chr1'] == chrom]
         left_bin_midpoints = (visible_interactions['end1'] + visible_interactions['start1']) / 2
         right_bin_midpoints = (visible_interactions['end2'] + visible_interactions['start2']) / 2
-        left_visible = (left_bin_midpoints >= self.ws) & (left_bin_midpoints <= self.we)
-        right_visible = (right_bin_midpoints >= self.ws) & (right_bin_midpoints <= self.we)
+        left_visible = (left_bin_midpoints >= ws) & (left_bin_midpoints <= we)
+        right_visible = (right_bin_midpoints >= ws) & (right_bin_midpoints <= we)
         visible_interactions = visible_interactions.loc[left_visible | right_visible]
 
         original_ylim = ax.get_ylim()
-        ax.set_xlim(self.ws, self.we)
+        ax.set_xlim(ws, we)
 
         for interaction_id in visible_interactions.index:
             draw_arc_interaction(ax,
                                  left_bin_center=left_bin_midpoints.loc[interaction_id],
                                  right_bin_center=right_bin_midpoints.loc[interaction_id],
-                                 xlim=(self.ws, self.we),
+                                 xlim=(ws, we),
                                  ylim=original_ylim,
                                  color=self.arc_color,
                                  baseline=self.baseline,
                                  vertical_scaling_factor=self.vertical_scaling_factor,
                                  direction=self.direction)
 
-        ax.set_xlim(self.ws, self.we)
+        ax.set_xlim(ws, we)
         ax.set_ylim(original_ylim)
         if self.label:
             ax.set_ylabel(self.label)
 
         if self.show_bin_centers:
-            leftmost_tick = numpy.ceil((
-                                               self.ws - self.bin_size / 2) / self.bin_size) * self.bin_size + self.bin_size / 2
-            rightmost_tick = numpy.floor((
-                                                 self.we - self.bin_size / 2) / self.bin_size + 1) * self.bin_size + self.bin_size / 2
+            leftmost_tick = numpy.ceil((ws - self.bin_size / 2) / self.bin_size) * self.bin_size + self.bin_size / 2
+            rightmost_tick = numpy.floor(
+                (we - self.bin_size / 2) / self.bin_size + 1) * self.bin_size + self.bin_size / 2
 
             ax.set_xticks(numpy.arange(leftmost_tick, rightmost_tick, self.bin_size))
             ax.set_xticklabels([])
@@ -271,7 +274,7 @@ class BedPlot(_BrowserSubPlot):
         self.patch_kwargs = self.DEFAULT_PATCH_KWARGS
         self.patch_kwargs.update(patch_kwargs)
 
-    def plot(self, ax):
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
         vert_span = ylim[1] - ylim[0]
         num_tracks = len(self.named_crds)
@@ -294,9 +297,9 @@ class BedPlot(_BrowserSubPlot):
             yticks.append(vert_midpoint)
             yticklabels.append(crdset_name)
 
-            this_crds = crd_df.loc[(crd_df.chrom == self.chrom) & (
-                    ((self.ws <= crd_df.chromStart) & (crd_df.chromStart <= self.we)) | (
-                    (self.ws <= crd_df.chromEnd) & (crd_df.chromEnd <= self.we)))]
+            this_crds = crd_df.loc[(crd_df.chrom == chrom) & (
+                    ((ws <= crd_df.chromStart) & (crd_df.chromStart <= we)) | (
+                    (ws <= crd_df.chromEnd) & (crd_df.chromEnd <= we)))]
 
             for crd_name in this_crds.index:
                 start_loc = this_crds.loc[crd_name, 'chromStart']
@@ -318,52 +321,53 @@ class BedPlot(_BrowserSubPlot):
         ax.set_yticklabels(yticklabels)
 
 
-#         ax.set_ylim(-1, len(self.named_crds))
-
-
 class WigPlot(_BrowserSubPlot):
+    # ToDo: Add support for stranded data
     def __init__(self, data, label=None, color=None, center_vector=False, scale_vector_to_plot=False,
-                 scale_plot_to_vector=False, ylim=None,
-                 convolution_kernel=None):
+                 # ylim=None,
+                 smoothing_bandwidth=0):
         super(WigPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data = data
         self.color = color
-        self.center = center
-        self.autoscale = autoscale
+        self.center = center_vector
+        self.scale_vector_to_plot = scale_vector_to_plot
         self.label = label
-        self.convolution_kernel = convolution_kernel
-        self.ylim = ylim
-        self.normalization_factor = 1
-
-    def plot(self, ax):
-        if self.ylim:
-            ylim = self.ylim
+        if smoothing_bandwidth:
+            self.convolution_kernel = utilities.gaussian_kernel(smoothing_bandwidth)
         else:
-            ylim = ax.get_ylim()
+            self.convolution_kernel = None
+        # self.ylim = ylim
+        # self.normalization_factor = 1
+
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        ylim = ax.get_ylim()
 
         vert_span = (ylim[1] - ylim[0])
         vert_center = vert_span / 2 + ylim[0]
 
-        this_plot_vector = self.data.query(query_chrom=self.chrom, query_start=self.ws, query_end=self.we)
+        this_plot_vector = self.data[chrom].loc[ws:we]
 
         if self.convolution_kernel is not None:
             this_plot_vector = pandas.Series(
                 scipy.signal.convolve(this_plot_vector, self.convolution_kernel, mode='same'),
                 index=this_plot_vector.index)
 
-        if self.autoscale:
+        if self.scale_vector_to_plot:
             this_plot_vector /= (this_plot_vector.max() - this_plot_vector.min())
             this_plot_vector *= vert_span
 
         if self.center:
             this_plot_vector -= this_plot_vector.mean()
             this_plot_vector += vert_center
-        #         print(self.center, self.scale, vert_center, vert_span, this_plot_vector.min(), this_plot_vector.max())
 
         this_plot_vector = this_plot_vector.loc[
-            (this_plot_vector.index >= self.ws) & (this_plot_vector.index < self.we)]
+            (this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
+
         ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
-        ax.set_ylim(ylim)
+        ax.autoscale(enable=True, axis='y')
+
+        if self.label:
+            ax.set_ylabel(self.label)
 
 # class FeatureStats(_BrowserSubPlot):
 #     def __init__(self, features_df, annotated_regions_df,
@@ -411,7 +415,7 @@ class GeneModels(_BrowserSubPlot):
                  gff3_filename,
                  label='genes',
                  color='k',
-                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dest='ucsc'),
+                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
                  feature_sources=DEFAULT_FEATURE_SOURCES,
                  gene_types=DEFAULT_GENE_TYPES,
                  transcript_types=DEFAULT_TRANSCRIPT_TYPES,
@@ -556,24 +560,24 @@ class GeneModels(_BrowserSubPlot):
 
         return [[gene_interval.data['ID'] for gene_interval in this_level] for this_level in display_levels]
 
-    def plot(self, ax):
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
         # find overlapping genes
         # ToDo: instead of intervaltrees, use intervaloverlaps module to answer these queries
-        overlapping_genes = self.genes.overlapping(self.chrom, self.ws, self.we)
-        overlapping_components = self.components.overlapping(self.chrom, self.ws, self.we)
+        overlapping_genes = self.genes.overlapping(chrom, ws, we)
+        overlapping_components = self.components.overlapping(chrom, ws, we)
 
         gene_display_levels = self._arrange_genes(overlapping_genes.values())
         ax.set_ylim((-0.5, len(gene_display_levels) - 1 + 0.5))
 
         # convert inches to data coordinates
-        chevron_spacing_dt = (self.we - self.ws) / (self.fig_width / self.chevron_spacing)
-        chevron_width_dt = (self.we - self.ws) / (self.fig_width / self.chevron_width)
-        truncation_width_dt = (self.we - self.ws) / (self.fig_width / self.truncation_size)
-        utr_endcap_width_dt = (self.we - self.ws) / (self.fig_width / self.utr_endcap_width)
+        chevron_spacing_dt = (we - ws) / (fig_width / self.chevron_spacing)
+        chevron_width_dt = (we - ws) / (fig_width / self.chevron_width)
+        truncation_width_dt = (we - ws) / (fig_width / self.truncation_size)
+        utr_endcap_width_dt = (we - ws) / (fig_width / self.utr_endcap_width)
 
-        feature_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (self.row_height / self.feature_height)
-        chevron_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (self.row_height / self.chevron_height)
-        truncation_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (self.row_height / self.truncation_size)
+        feature_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (row_height / self.feature_height)
+        chevron_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (row_height / self.chevron_height)
+        truncation_height_dt = (ax.get_ylim()[1] - ax.get_ylim()[0]) / (row_height / self.truncation_size)
 
         for gene_num, level_genes in enumerate(gene_display_levels):
 
@@ -583,13 +587,13 @@ class GeneModels(_BrowserSubPlot):
                 gene_data = overlapping_genes[gene_id]
                 #                 print(gene_id, gene_data['Name'])
 
-                left_truncated = gene_data['start'] < self.ws
-                right_truncated = gene_data['end'] > self.we
+                left_truncated = gene_data['start'] < ws
+                right_truncated = gene_data['end'] > we
 
-                visible_gene_start = max(gene_data['start'], self.ws)
+                visible_gene_start = max(gene_data['start'], ws)
                 if left_truncated:
                     visible_gene_start += truncation_width_dt * 2
-                visible_gene_end = min(gene_data['end'], self.we)
+                visible_gene_end = min(gene_data['end'], we)
                 if right_truncated:
                     visible_gene_end -= truncation_width_dt * 2
 
@@ -618,8 +622,8 @@ class GeneModels(_BrowserSubPlot):
 
                 if left_truncated:
                     y_points = [gene_num, gene_num - truncation_height_dt, gene_num + truncation_height_dt]
-                    left_x_point = self.ws + 1
-                    right_x_point = self.ws + truncation_width_dt + 1
+                    left_x_point = ws + 1
+                    right_x_point = ws + truncation_width_dt + 1
 
                     x_points = numpy.array([left_x_point, right_x_point, right_x_point])
 
@@ -641,8 +645,8 @@ class GeneModels(_BrowserSubPlot):
 
                 if right_truncated:
                     y_points = [gene_num, gene_num - truncation_height_dt, gene_num + truncation_height_dt]
-                    left_x_point = self.we - truncation_width_dt - 1
-                    right_x_point = self.we - 1
+                    left_x_point = we - truncation_width_dt - 1
+                    right_x_point = we - 1
 
                     x_points = numpy.array([right_x_point, left_x_point, left_x_point])
 
@@ -835,8 +839,8 @@ def visualize(plot_objects,
         this_ax.set_xlim(ws, we)
 
         for plot_object in plot_object_subset:
-            plot_object.set_globals(chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
-            plot_object.plot(this_ax)
+            # plot_object.set_globals(chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
+            plot_object.plot(this_ax, chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
 
         # ToDo: Refactor legend code to get colors and names from objects not from axes handles.
         if show_vector_legend and len(this_ax.get_legend_handles_labels()[1]):

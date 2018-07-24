@@ -2,6 +2,7 @@ import os
 
 import numpy
 import pandas
+from scipy.signal import convolve
 
 from . import utilities
 
@@ -11,23 +12,60 @@ DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
 # ToDo: For each class, allow option of loading into memory or leaving on disk (where applicable)
 # ToDo: Add a transform function and smoothing.
 
-class GenomicData:
-    def query(self, chrom, start, end):
-        return None
+class _ChromWrapper:
+    def __init__(self, chrom, parent_data_source):
+        self.chrom = chrom
+        self.parent_data_source = parent_data_source
+
+    def __getitem__(self, key):
+        # print(key)
+        # ToDo: Add support for step argument
+        try:
+            query_start = key.start
+            query_end = key.stop
+        except TypeError:  # Handle scalar indices
+            query_start = key
+            query_end = key + 1
+
+        return self.parent_data_source.query(query_chrom=self.chrom, query_start=query_start, query_end=query_end)
 
 
-class SeriesDict(GenomicData):
-    def __init__(self, series_dict):
-        self.series_by_chrom = series_dict
+class _DataVector:
+    def __init__(self, chrom, parent_data_source):
+        self.loc = _ChromWrapper(chrom=chrom, parent_data_source=parent_data_source)
+
+
+class _DataSource:
+    # ToDo: Add methods for arithmetic and such, as done for old Pileups class
+    def __init__(self, transform=None, smoothing_bandwidth=0):
+        self.transform = transform
+        if smoothing_bandwidth:
+            self.convolution_kernel = utilities.gaussian_kernel(smoothing_bandwidth)
+        else:
+            self.convolution_kernel = None
+
+    def _query(self, query_chrom, query_start, query_end):
+        print('Stub method -- must be overridden by inheritors')
 
     def query(self, query_chrom, query_start, query_end):
-        return self.series_by_chrom[query_chrom].loc[query_start:query_end]
+        result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
+        if self.convolution_kernel is not None:
+            result = pandas.Series(convolve(result, self.convolution_kernel, mode='same'), index=result.index)
+        if self.transform:
+            result = self.transform(result)
+        return result
+
+    def __getitem__(self, key):
+        return _DataVector(chrom=key, parent_data_source=self)
 
 
-class TagDirectory(GenomicData):
+class TagDirectory(_DataSource):
     tag_strand_translator = {0: '+', 1: '-'}
 
-    def __init__(self, tag_directory_path, normalize_to=DEFAULT_TAG_COUNT_NORMALIZATION_TARGET):
+    def __init__(self, tag_directory_path, normalize_to=DEFAULT_TAG_COUNT_NORMALIZATION_TARGET, transform=None,
+                 smoothing_bandwidth=0):
+        super(TagDirectory, self).__init__(transform=transform, smoothing_bandwidth=smoothing_bandwidth)
+
         self.tag_directory_path = tag_directory_path
 
         if normalize_to:
@@ -38,9 +76,6 @@ class TagDirectory(GenomicData):
             num_tags = int(float(sizeline[2]))
 
             self.normalization_factor = num_tags / normalize_to
-
-    def __getitem__(self, key):
-        return
 
     def _query(self, query_chrom, query_start, query_end, read_handling='starts'):
         # ToDo: Add argument validation to all functions and methods with string parameters
