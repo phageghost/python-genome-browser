@@ -322,13 +322,14 @@ class BedPlot(_BrowserSubPlot):
 
 
 class WigPlot(_BrowserSubPlot):
-    def __init__(self, data, label=None, color=None, center=False, scale=False, ylim=None,
+    def __init__(self, data, label=None, color=None, center_vector=False, scale_vector_to_plot=False,
+                 scale_plot_to_vector=False, ylim=None,
                  convolution_kernel=None):
-        super(WigPlot, self).__init__()
+        super(WigPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data = data
         self.color = color
         self.center = center
-        self.scale = scale
+        self.autoscale = autoscale
         self.label = label
         self.convolution_kernel = convolution_kernel
         self.ylim = ylim
@@ -350,7 +351,7 @@ class WigPlot(_BrowserSubPlot):
                 scipy.signal.convolve(this_plot_vector, self.convolution_kernel, mode='same'),
                 index=this_plot_vector.index)
 
-        if self.scale:
+        if self.autoscale:
             this_plot_vector /= (this_plot_vector.max() - this_plot_vector.min())
             this_plot_vector *= vert_span
 
