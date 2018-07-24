@@ -186,9 +186,9 @@ class _BrowserSubPlot:
 class InteractionPlot(_BrowserSubPlot):
     def __init__(self, interaction_df,
                  bin_size,
-                 arc_color='k',
-                 direction='up',
-                 baseline=0,
+                 arc_color=(0.7, 0.3, 0.6),
+                 direction='down',
+                 baseline=None,
                  vertical_scaling_factor=1,
                  thickness_column=None,
                  show_bin_centers=True,
@@ -197,6 +197,11 @@ class InteractionPlot(_BrowserSubPlot):
 
         self.interaction_df = interaction_df
         self.bin_size = bin_size
+        if baseline is None:
+            if direction == 'down':
+                baseline = 1
+            else:
+                baseline = 0
         self.baseline = baseline
         self.vertical_scaling_factor = vertical_scaling_factor
         self.arc_color = arc_color
@@ -204,6 +209,7 @@ class InteractionPlot(_BrowserSubPlot):
         self.direction = direction
         self.show_bin_centers = show_bin_centers
         self.thickness_column = thickness_column
+
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         # Filter the interaction DataFrame to interactions with at least one anchor point within the visible window.
@@ -215,7 +221,7 @@ class InteractionPlot(_BrowserSubPlot):
         visible_interactions = visible_interactions.loc[left_visible | right_visible]
 
         original_ylim = ax.get_ylim()
-        ax.set_xlim(ws, we)
+        ax.set_xlim(ws, we)  # ToDo: Standardize this behavior across all subplot classes
 
         for interaction_id in visible_interactions.index:
             draw_arc_interaction(ax,
@@ -230,6 +236,7 @@ class InteractionPlot(_BrowserSubPlot):
 
         ax.set_xlim(ws, we)
         ax.set_ylim(original_ylim)
+
         if self.label:
             ax.set_ylabel(self.label)
 
@@ -244,6 +251,7 @@ class InteractionPlot(_BrowserSubPlot):
             if self.direction == 'down':
                 ax.xaxis.set_ticks_position('top')
 
+        ax.set_yticks([])
 
 class BedPlot(_BrowserSubPlot):
     DEFAULT_PATCH_KWARGS = {'linewidth': 1, 'edgecolor': 'k'}
@@ -792,6 +800,8 @@ def visualize(plot_objects,
                   'axes.edgecolor': 'w',
                   'axes.facecolor': '#EAEAF2',
               })):
+    # ToDo: Add gene (or other feature) lookup instead of specifying coordinates.
+
     if we == 0:
         we = genome.contig_lengths[chrom]
 

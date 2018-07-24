@@ -11,6 +11,7 @@ DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
 
 # ToDo: For each class, allow option of loading into memory or leaving on disk (where applicable)
 # ToDo: Add a transform function and smoothing.
+# ToDo: Add indexing of on-disk csv-like files
 
 class _ChromWrapper:
     def __init__(self, chrom, parent_data_source):
@@ -121,3 +122,10 @@ class TagDirectory(_DataSource):
 
         return query_result
 
+
+class IntervalData:
+    def __init__(self):
+        pass
+
+    def query(self, query_chrom, query_start, query_end):
+        pass

@@ -7,6 +7,10 @@ from scipy.stats import norm
 from . import romannumerals
 
 
+# ToDo: Bring back scale bar
+# ToDo: Add option for solid fill of vectors
+
+
 def roundto(num, nearest):
     """
     Rounds :param:`num` to the nearest increment of :param:`nearest`
