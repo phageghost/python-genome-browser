@@ -14,12 +14,12 @@ from .intervaldict import IntervalDict
 from .utilities import log_print
 
 DEFAULT_ARC_POINTS = 200
-
 CHROMOSOME_DIALECT = 'ucsc'
 DEFAULT_FEATURE_SOURCES = {'ensembl', 'havana', 'ensembl_havana'}
 DEFAULT_GENE_TYPES = {'gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript'}
 DEFAULT_TRANSCRIPT_TYPES = {'transcript', 'lincRNA'}
 DEFAULT_COMPONENT_TYPES = {'CDS', 'three_prime_UTR', 'five_prime_UTR'}
+
 
 def compute_half_arc_points(center, a, b, theta1, theta2, num_points=DEFAULT_ARC_POINTS):
     """
@@ -322,16 +322,17 @@ class BedPlot(_BrowserSubPlot):
 
 
 class WigPlot(_BrowserSubPlot):
-    def __init__(self, vector_series, label=None, color=None, center=False, scale=False, ylim=None,
+    def __init__(self, data, label=None, color=None, center=False, scale=False, ylim=None,
                  convolution_kernel=None):
         super(WigPlot, self).__init__()
+        self.data = data
         self.color = color
-        self.vector = vector_series
         self.center = center
         self.scale = scale
         self.label = label
         self.convolution_kernel = convolution_kernel
         self.ylim = ylim
+        self.normalization_factor = 1
 
     def plot(self, ax):
         if self.ylim:
@@ -342,7 +343,7 @@ class WigPlot(_BrowserSubPlot):
         vert_span = (ylim[1] - ylim[0])
         vert_center = vert_span / 2 + ylim[0]
 
-        this_plot_vector = self.vector.copy()
+        this_plot_vector = self.data.query(query_chrom=self.chrom, query_start=self.ws, query_end=self.we)
 
         if self.convolution_kernel is not None:
             this_plot_vector = pandas.Series(
@@ -357,11 +358,11 @@ class WigPlot(_BrowserSubPlot):
             this_plot_vector -= this_plot_vector.mean()
             this_plot_vector += vert_center
         #         print(self.center, self.scale, vert_center, vert_span, this_plot_vector.min(), this_plot_vector.max())
+
         this_plot_vector = this_plot_vector.loc[
             (this_plot_vector.index >= self.ws) & (this_plot_vector.index < self.we)]
         ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
         ax.set_ylim(ylim)
-
 
 # class FeatureStats(_BrowserSubPlot):
 #     def __init__(self, features_df, annotated_regions_df,

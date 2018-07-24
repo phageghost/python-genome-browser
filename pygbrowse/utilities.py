@@ -62,36 +62,62 @@ def binary_search_tag_file(tag_filename, search_target):
 
     Note that positions in tag files have a 1-based index.
     """
+
+    def get_read_start(file_offset):
+        tag_file.seek(file_offset)
+        if file_offset > 0:
+            _ = tag_file.readline()  # read forward to get to a line start
+        this_line = tag_file.readline().strip()
+        if tag_file.tell() >= filesize:
+            # We've reached the end of the file and the reads are still upstream of the target
+            return None
+        else:
+            return int(this_line.split('\t')[1])
+
     filesize = os.path.getsize(tag_filename)
     search_window_start = 0
     search_window_end = filesize - 1
-    guess = int((search_window_start + search_window_end) / 2)
 
     with open(tag_filename, 'rt') as tag_file:
+        first_genomic_start = get_read_start(search_window_start)
+        # last_genomic_start = get_read_position(search_window_end)
+
+        if search_target < first_genomic_start:
+            return search_window_start
+
         while search_window_end - search_window_start > 1:
-            tag_file.seek(guess)
-            if guess > 0:
-                _ = tag_file.readline()  # read forward to get to a line start
+            guess = int((search_window_start + search_window_end) / 2)
+            guess_genomic_start = get_read_start(guess)
 
-            thisline = tag_file.readline().strip()
-
-            if thisline == '':
-                # We've reached the end of the file and the reads are still upstream of the target
+            if guess_genomic_start == None:
                 return None
 
-            genomic_start = int(thisline.split('\t')[1])
+            print(search_window_start, guess, search_window_end, guess_genomic_start)
 
-            print(search_window_start, guess, search_window_end, genomic_start, )
-
-            if genomic_start < search_target:
+            if guess_genomic_start < search_target:
+                print('\ttoo low!')
                 search_window_start = guess
 
-            elif genomic_start >= search_target:
+            elif guess_genomic_start > search_target:
                 search_window_end = guess
 
-            guess = int((search_window_start + search_window_end) / 2)
+                print('\ttoo high!')
+            else:
+                print('\tjust right!')
+                break
 
-    return guess
+        if guess_genomic_start < search_target:
+            guess += 1
+
+        tag_file.seek(guess)
+        _ = tag_file.readline()
+        guess = tag_file.tell()
+        thisline = tag_file.readline()
+
+        print('final:', guess, thisline)
+
+        return guess
+
 
 def pretty_now():
     """
