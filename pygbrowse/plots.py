@@ -335,6 +335,8 @@ class BedPlot(_BrowserSubPlot):
                         s='{:>0.2}'.format(self.interval_data.loc[interval_name, self.display_value]), ha='center')
 
         # ax.set_ylim(0, 1)
+        ax.set_ylabel(self.label)
+
 
 
 class WigPlot(_BrowserSubPlot):
@@ -514,12 +516,6 @@ class GeneModels(_BrowserSubPlot):
         self.genes = IntervalDict(genes)
         self.transcripts = IntervalDict(transcripts)
         self.components = IntervalDict(components)
-        print('*' * 80)
-        print(transcripts)
-        print('*' * 80)
-        print(components)
-        print('*' * 80)
-        print(self.components)
         self.gene_names_to_ensembl_ids = gene_names_to_ensembl_ids
 
     @staticmethod
@@ -776,7 +772,7 @@ class GenomePlotter:
         """
         self.subplot_objects = subplot_objects
 
-    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, *, ax_spacing=0.1, num_xticks=10,
+    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, *, ax_spacing=0.05, num_xticks=10,
                   seaborn_style=seaborn.axes_style(style='ticks',
                                                    rc={'axes.edgecolor': 'w', 'axes.facecolor': '#EAEAF2'})):
         """
@@ -851,7 +847,7 @@ class GenomePlotter:
                                  row_height=row_heights[ax_idx])
 
             # ToDo: Refactor legend code to get colors and names from objects not from axes handles.
-            if len(this_ax.get_legend_handles_labels()[1]):
-                this_ax.legend(loc=self.VECTOR_LEGEND_LOC)
+            # if len(this_ax.get_legend_handles_labels()[1]):
+            #     this_ax.legend(loc=self.VECTOR_LEGEND_LOC)
 
         return fig

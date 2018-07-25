@@ -77,9 +77,9 @@ class TagDirectory(_DataSource):
                 sizeline = tag_info_file.readlines()[1].strip().split('\t')
             num_tags = int(float(sizeline[2]))
 
-            self.normalization_factor = num_tags / normalize_to
+            self.normalization_factor = normalize_to / num_tags
 
-    def _query(self, query_chrom, query_start, query_end, read_handling='starts'):
+    def _query(self, query_chrom, query_start, query_end, read_handling='reads'):
         # ToDo: Add argument validation to all functions and methods with string parameters
         # ToDo: Add verbosity-based logging output
         # ToDo; Compare performance with memory-mapped pandas DataFrames
@@ -104,7 +104,7 @@ class TagDirectory(_DataSource):
                     if read_handling == 'starts':
                         assert read_start > query_start
                         if read_start < query_end:
-                            query_result.loc[read_start] = depth
+                            query_result.loc[read_start] += depth
                         else:
                             done = True
 
@@ -112,10 +112,10 @@ class TagDirectory(_DataSource):
                         # ToDo: Hard to do this in a streaming fashion because we don't know how far upstream to seek to capture left-overhanging reads.
                         read_len = int(line_fields[4])
                         if query_start < read_start <= query_end or query_start < read_start + read_len <= query_end:
-                            print(max(read_start, query_start), min(read_start + read_len,
-                                                                    query_end))
+                            # print(max(read_start, query_start), min(read_start + read_len,
+                            #                                         query_end))
                             query_result.loc[max(read_start, query_start):min(read_start + read_len,
-                                                                              query_end)] = depth  # trim to visible vector
+                                                                              query_end)] += depth  # trim to visible vector
                         else:
                             done = True
 
