@@ -17,10 +17,11 @@ DEFAULT_ARC_POINTS = 200
 CHROMOSOME_DIALECT = 'ucsc'
 DEFAULT_FEATURE_SOURCES = {'ensembl', 'havana', 'ensembl_havana'}
 DEFAULT_GENE_TYPES = {'gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript'}
-DEFAULT_TRANSCRIPT_TYPES = {'transcript', 'lincRNA'}
+DEFAULT_TRANSCRIPT_TYPES = {'transcript', 'lincRNA', 'mRNA'}
 DEFAULT_COMPONENT_TYPES = {'CDS', 'three_prime_UTR', 'five_prime_UTR'}
 
 
+# ToDo: Move this stuff to a separate module so we can delete wholesale when the Ellipse class gets fixed.
 def compute_half_arc_points(center, a, b, theta1, theta2, num_points=DEFAULT_ARC_POINTS):
     """
     Computes the coordinates for component points of a polygonal approximation to
@@ -376,6 +377,7 @@ class WigPlot(_BrowserSubPlot):
             this_plot_vector += vert_center
 
         this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
+        this_plot_vector.name = self.label
 
         ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
         ax.autoscale(enable=True, axis='y')
@@ -430,7 +432,7 @@ class GeneModels(_BrowserSubPlot):
         components = {}
         component_num = 0  # incrementing component id
 
-        # ToDo: Benchmark against using pandas or csv or BCBio.GFF if I can get it to run.
+        # ToDo: Benchmark against using pandas or csv (or BCBio.GFF if I can get it to run.)
         log_print('Loading gene model information from {}. This may take a few minutes ...'.format(gff3_filename))
 
         if gff3_filename.endswith('.gz'):
@@ -456,7 +458,7 @@ class GeneModels(_BrowserSubPlot):
                     strand = split_line[6]
 
                     fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
-
+                    # print(line_num, line)
                     if feature_type in gene_types:
                         ensembl_id = fields['ID']
                         gene_name = fields['Name']
@@ -473,9 +475,11 @@ class GeneModels(_BrowserSubPlot):
                         if gene_name not in gene_names_to_ensembl_ids:
                             gene_names_to_ensembl_ids[gene_name] = []
                         gene_names_to_ensembl_ids[gene_name].append(ensembl_id)
+                        # print('\t added gene {}'.format(ensembl_id))
 
                     elif feature_type in transcript_types:
                         parent = fields['Parent']
+                        # print('\ttranscript parent {}'.format(parent))
                         if parent in genes:
                             ensembl_id = fields['ID']
                             transcripts[ensembl_id] = {'contig': contig,
@@ -486,9 +490,12 @@ class GeneModels(_BrowserSubPlot):
                             transcripts[ensembl_id].update(fields)
 
                             genes[parent]['transcripts'].append(ensembl_id)
+                            # print('\t added transcript {} with parent {}'.format(ensembl_id, parent))
+
 
                     elif feature_type in component_types:
                         parent = fields['Parent']
+                        # print('\thas parent {}. {}'.format(parent, parent in transcripts))
                         if parent in transcripts:
                             if 'exon_id' in fields:
                                 ensembl_id = fields['exon_id']
@@ -507,6 +514,12 @@ class GeneModels(_BrowserSubPlot):
         self.genes = IntervalDict(genes)
         self.transcripts = IntervalDict(transcripts)
         self.components = IntervalDict(components)
+        print('*' * 80)
+        print(transcripts)
+        print('*' * 80)
+        print(components)
+        print('*' * 80)
+        print(self.components)
         self.gene_names_to_ensembl_ids = gene_names_to_ensembl_ids
 
     @staticmethod
@@ -751,76 +764,94 @@ def compute_ax_row_positions(row_heights, ax_spacing=0.1):
     return bottoms, heights
 
 
-def visualize(plot_objects,
-              chrom='',
-              ws=0, we=0,
-              genome=None,
-              fig_width=12,
-              row_heights=1,
-              ax_spacing=0.1,
-              show_vector_legend=False,
-              vector_legend_loc=0,
-              #                           show_x_span=False,
-              #                           x_span_kwargs={},
-              num_ticks=10,
-              seaborn_style=seaborn.axes_style(style='ticks', rc={
-                  'axes.edgecolor': 'w',
-                  'axes.facecolor': '#EAEAF2',
-              })):
-    # ToDo: Add gene (or other feature) lookup instead of specifying coordinates.
+class GenomePlotter:
+    VECTOR_LEGEND_LOC = 0
 
-    if we == 0:
-        we = genome.contig_lengths[chrom]
+    def __init__(self, subplot_objects):
+        """
+        Given a 2D nested list of genomic subplot objects it will allow the user to call the .visualize() method
+        to generate plots of genomic data.
 
-    ws, we = int(ws), int(we)
+        :param plot_objects:
+        """
+        self.subplot_objects = subplot_objects
 
-    assert we > ws, 'Window end must be greater than window start! Got: {}, {}'.format(ws, we)
+    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, *, ax_spacing=0.1, num_xticks=10,
+                  seaborn_style=seaborn.axes_style(style='ticks',
+                                                   rc={'axes.edgecolor': 'w', 'axes.facecolor': '#EAEAF2'})):
+        """
+        Generate, display and return a matplotlib.Figure object comprising one or more Axes representing the genomic
+        data tracks specified at initialization.
 
-    # if we receive a scalar here, use it as the height for all rows
-    try:
-        if len(row_heights) == 1:
-            row_heights = row_heights * len(plot_objects)  # treat as a uniform row height
-    except TypeError:
-        row_heights = [row_heights] * len(plot_objects)  # treat as a uniform row height
+        The region to plot is specified by the parameters chrom, start, and end.
 
-    assert len(row_heights) == len(plot_objects)
+        :param:`fig_width` is specified in inches
 
-    span = we - ws
-    xtick_increment = span / num_ticks
-    rounding_increment = 5 * 10 ** numpy.round(numpy.log10(xtick_increment) - 1)
-    xtick_increment = utilities.roundto(xtick_increment, rounding_increment)
-    num_ticks = int(span / xtick_increment) + 1
-    round_start = utilities.roundto(ws, rounding_increment)
+        :param:`row_heights` can be specified as a scalar value (in inches), in which case the same row height will be
+        used for all subplots, or as an iterable, in which case the row heights will be applied to the subplots
+        in order.
 
-    seaborn.set_style(seaborn_style)
+        :param chrom:
+        :param start:
+        :param end:
+        :param fig_width:
+        :param row_heights:
+        :param ax_spacing:
+        :param num_xticks:
+        :param seaborn_style:
+        :return:
+        """
+        # ToDo: Add gene (or other feature) lookup instead of specifying coordinates.
+        start, end = int(start), int(end)
 
-    fig = plt.figure(len(plot_objects),
-                     figsize=(fig_width, numpy.sum(row_heights) * (1 + ax_spacing * len(plot_objects))))
-    bottoms, heights = compute_ax_row_positions(row_heights=row_heights, ax_spacing=ax_spacing)
+        assert end > start, 'Window end must be greater than window start! Got: {}, {}'.format(start, end)
 
-    for ax_idx in range(len(plot_objects)):
-        this_ax = fig.add_axes([0, bottoms[ax_idx], 1, heights[ax_idx]])
+        # if we receive a scalar here, use it as the height for all rows
+        try:
+            if len(row_heights) == 1:
+                row_heights = row_heights * len(self.subplot_objects)  # treat as a uniform row height
+        except TypeError:
+            row_heights = [row_heights] * len(self.subplot_objects)  # treat as a uniform row height
 
-        if ax_idx == len(plot_objects) - 1:
-            this_ax.set_xticks(numpy.arange(num_ticks) * xtick_increment + round_start)
-            this_ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
-            this_ax.set_xlabel('{} position'.format(chrom))
-        else:  # clear out xticks but plot objects can override this later
-            this_ax.set_xlabel('')
-            this_ax.set_xticks([])
+        assert len(row_heights) == len(self.subplot_objects)
 
-        plot_object_subset = plot_objects[ax_idx]
+        span = end - start
+        xtick_increment = span / num_xticks
+        rounding_increment = 5 * 10 ** numpy.round(numpy.log10(xtick_increment) - 1)
+        xtick_increment = utilities.roundto(xtick_increment, rounding_increment)
+        num_ticks = int(span / xtick_increment) + 1
+        round_start = utilities.roundto(start, rounding_increment)
 
-        # Set default plot limits (can be changed by client objects)
-        this_ax.set_ylim(0, 1)
-        this_ax.set_xlim(ws, we)
+        seaborn.set_style(seaborn_style)
 
-        for plot_object in plot_object_subset:
-            # plot_object.set_globals(chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
-            plot_object.plot(this_ax, chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
+        fig = plt.figure(len(self.subplot_objects),
+                         figsize=(fig_width, numpy.sum(row_heights) * (1 + ax_spacing * len(self.subplot_objects))))
+        bottoms, heights = compute_ax_row_positions(row_heights=row_heights, ax_spacing=ax_spacing)
 
-        # ToDo: Refactor legend code to get colors and names from objects not from axes handles.
-        if show_vector_legend and len(this_ax.get_legend_handles_labels()[1]):
-            this_ax.legend(loc=vector_legend_loc)
+        for ax_idx in range(len(self.subplot_objects)):
+            this_ax = fig.add_axes([0, bottoms[ax_idx], 1, heights[ax_idx]])
 
-    return fig
+            if ax_idx == len(self.subplot_objects) - 1:
+                this_ax.set_xticks(numpy.arange(num_ticks) * xtick_increment + round_start)
+                this_ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                this_ax.set_xlabel('{} position'.format(chrom))
+            else:  # clear out xticks but plot objects can override this later
+                this_ax.set_xlabel('')
+                this_ax.set_xticks([])
+
+            plot_object_subset = self.subplot_objects[ax_idx]
+
+            # Set default plot limits (can be changed by client objects)
+            this_ax.set_ylim(0, 1)
+            this_ax.set_xlim(start, end)
+
+            for plot_object in plot_object_subset:
+                # plot_object.set_globals(chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
+                plot_object.plot(this_ax, chrom=chrom, ws=start, we=end, fig_width=fig_width,
+                                 row_height=row_heights[ax_idx])
+
+            # ToDo: Refactor legend code to get colors and names from objects not from axes handles.
+            if len(this_ax.get_legend_handles_labels()[1]):
+                this_ax.legend(loc=self.VECTOR_LEGEND_LOC)
+
+        return fig

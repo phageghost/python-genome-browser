@@ -130,13 +130,30 @@ class IntervalData:
     HOMER_ANNOTATEDPEAKS_COLUMN_RENAMER = {'Chr': 'chrom', 'Start': 'chromStart', 'End': 'chromEnd', 'Strand': 'strand'}
 
     def __init__(self, interval_data, format='bed'):
+        """
+        Loads genomic interval information in various formats and stores them in a standardized form as a
+        pandas.DataFrame in self.data.
+
+        :param:`interval_data` should be a pandas.DataFrame representing BED-formatted genomic data, or,
+        alternatively, a filename pointing to one of the following file formats:
+
+        * A BED file
+        * A HOMER peak file
+        * A HOMER annotated peak file.
+
+        If a filename is passed instead of a DataFrame, :param:`format` should be specified. Allowed values are:
+            'bed', 'homer', 'homer_annotated'
+
+        :param interval_data:
+        :param format:
+        """
         try:
             _ = interval_data.loc[:, ['chrom', 'chromStart', 'chromEnd', 'strand']]
 
         except KeyError:  # maybe it's a BED DataFrame without column names?
             log_print('Guessing this is a BED-style DataFrame without column names')
 
-            assert interval_data.shape[1] >= 3, 'Not enough column'
+            assert interval_data.shape[1] >= 3, 'Not enough columns (got {})!'.format(interval_data.shape[1])
 
             if interval_data.shape[1] >= 6:  # assume name is still separate column
                 self.data = interval_data.copy()
