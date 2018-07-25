@@ -255,12 +255,19 @@ class InteractionPlot(_BrowserSubPlot):
 
 class BedPlot(_BrowserSubPlot):
     DEFAULT_PATCH_KWARGS = {'linewidth': 1, 'edgecolor': 'k'}
+    CHROM_COL_NUM = 0
+    START_COL_NUM = 1
+    END_COL_NUM = 2
 
-    def __init__(self, named_crds,
-                 crd_cmap='Purples',
-                 height=None,
-                 annotation_col='',
-                 patch_kwargs={}):
+    def __init__(self, interval_data_object,
+                 label='',
+                 cmap='RdBu_r',
+                 baseline=0.5,
+                 color='k',
+                 color_by='',
+                 display_value='',
+                 patch_height=0.5,
+                 patch_kwargs=None):
         """
         Takes an iterable of tuples in the form:
 
@@ -270,63 +277,63 @@ class BedPlot(_BrowserSubPlot):
         """
         super(BedPlot, self).__init__()
 
-        self.named_crds = named_crds[::-1]
-        extent = max([numpy.abs(crd_df['score']).max() for crdset_name, crd_df in named_crds])
+        self.interval_data = interval_data_object.data
+        self.color = color
 
-        self.color_mapper = matplotlib.cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=-extent,
-                                                                                          vmax=extent),
-                                                         cmap=crd_cmap)
+        self.color_by = color_by
+        if self.color_by:
+            assert self.color_by in self.interval_data.columns, 'Color-by column {} is not in the interval data!'.format(
+                self.color_by)
+            extent = numpy.abs(self.interval_data[self.color_by]).max()
 
-        self.height = height
-        self.annotation_column = annotation_col
+            self.color_mapper = matplotlib.cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=-extent,
+                                                                                              vmax=extent),
+                                                             cmap=cmap)
+        else:
+            self.color_mapper = None
+
+        self.display_value = display_value
+        if self.display_value:
+            assert self.display_value in self.interval_data.columns, 'Display value column {} is not in the interval data!'.format(
+                self.display_value)
+        self.label = label
+        self.patch_height = patch_height
+
+        self.baseline = baseline
         self.patch_kwargs = self.DEFAULT_PATCH_KWARGS
-        self.patch_kwargs.update(patch_kwargs)
+        if patch_kwargs:
+            self.patch_kwargs.update(patch_kwargs)
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
         vert_span = ylim[1] - ylim[0]
-        num_tracks = len(self.named_crds)
-        if self.height is None:
-            self.height = vert_span / (len(self.named_crds) * 2 - 1)
 
-        vert_pad = (vert_span - num_tracks * self.height) / (num_tracks + 1)
-        canvas_span = vert_span - (2 * vert_pad) - self.height
+        ax.set_yticks(list(ax.get_yticks()) + [self.baseline])
+        ax.set_yticklabels(list(ax.get_yticklabels()) + [self.label])
 
-        yticks = []
-        yticklabels = []
-        for crdset_idx, (crdset_name, crd_df) in enumerate(self.named_crds):
-            if num_tracks == 1:
-                bottom = vert_pad
+        visible_intervals = self.interval_data.loc[(self.interval_data.chrom == chrom) & (
+                ((ws <= self.interval_data.chromStart) & (self.interval_data.chromStart <= we)) | (
+                (ws <= self.interval_data.chromEnd) & (self.interval_data.chromEnd <= we)))]
+
+        for interval_name in visible_intervals.index:
+            start_loc = visible_intervals.loc[interval_name, 'chromStart']
+            end_loc = visible_intervals.loc[interval_name, 'chromEnd']
+            if self.color_by:
+                interval_color = self.color_mapper.to_rgba(self.interval_data.loc[interval_name][self.color_by])
             else:
-                bottom = vert_pad + (crdset_idx / (num_tracks - 1) * canvas_span)
+                interval_color = self.color
 
-            vert_midpoint = bottom + self.height / 2
+            rec = matplotlib.patches.Rectangle(xy=(start_loc, self.baseline - self.patch_height / 2),
+                                               width=end_loc - start_loc,
+                                               height=self.patch_height,
+                                               facecolor=interval_color,
+                                               **self.patch_kwargs)
+            ax.add_patch(rec)
+            if self.display_value:
+                ax.text(x=(start_loc + end_loc) / 2, y=self.baseline,
+                        s='{:>0.2}'.format(self.interval_data.loc[interval_name, self.display_value]), ha='center')
 
-            yticks.append(vert_midpoint)
-            yticklabels.append(crdset_name)
-
-            this_crds = crd_df.loc[(crd_df.chrom == chrom) & (
-                    ((ws <= crd_df.chromStart) & (crd_df.chromStart <= we)) | (
-                    (ws <= crd_df.chromEnd) & (crd_df.chromEnd <= we)))]
-
-            for crd_name in this_crds.index:
-                start_loc = this_crds.loc[crd_name, 'chromStart']
-                end_loc = this_crds.loc[crd_name, 'chromEnd']
-                interval_color = self.color_mapper.to_rgba(crd_df.loc[crd_name]['score'])
-                #                     print('plotting {} in {}'.format(crd_name, interval_color))
-
-                rec = matplotlib.patches.Rectangle(xy=(start_loc, bottom),
-                                                   width=end_loc - start_loc,
-                                                   height=self.height,
-                                                   facecolor=interval_color,
-                                                   **self.patch_kwargs)
-                ax.add_patch(rec)
-                if self.annotation_column and self.annotation_column in crd_df.columns:
-                    #                         print((start_loc+end_loc)/2, midpoint)
-                    ax.text(x=(start_loc + end_loc) / 2, y=vert_midpoint,
-                            s='{:>0.2}'.format(crd_df.loc[crd_name, self.annotation_column]), ha='center')
-        ax.set_yticks(yticks)
-        ax.set_yticklabels(yticklabels)
+        # ax.set_ylim(0, 1)
 
 
 class WigPlot(_BrowserSubPlot):
@@ -368,8 +375,7 @@ class WigPlot(_BrowserSubPlot):
             this_plot_vector -= this_plot_vector.mean()
             this_plot_vector += vert_center
 
-        this_plot_vector = this_plot_vector.loc[
-            (this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
+        this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
 
         ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
         ax.autoscale(enable=True, axis='y')
@@ -377,51 +383,11 @@ class WigPlot(_BrowserSubPlot):
         if self.label:
             ax.set_ylabel(self.label)
 
-# class FeatureStats(_BrowserSubPlot):
-#     def __init__(self, features_df, annotated_regions_df,
-#                  plot_mean=True, plot_var=False, plot_sd=False,
-#                  plot_relvar=False, plot_cv=True, znorm_tracks=False):
-#         super(FeatureStats, self).__init__()
-#
-#         self.displayed_features = features_df.T.copy()
-#         self.displayed_features.columns = (annotated_regions_df.loc[self.displayed_features.columns].Start + \
-#                                            annotated_regions_df.loc[self.displayed_features.columns].End) / 2
-#
-#         self.znorm_tracks = znorm_tracks
-#         self.plot_mean = plot_mean
-#         self.plot_var = plot_var
-#         self.plot_sd = plot_sd
-#         self.plot_relvar = plot_relvar
-#         self.plot_cv = plot_cv
-#
-#     def plot(self, ax):
-#         def plot_possibly_znormed(track_data):
-#             if self.znorm_tracks: track_data = toolbox.znorm(track_data)
-#             ax.plot(track_data)
-#
-#         if self.plot_mean or self.plot_cv:
-#             feature_mean = self.displayed_features.mean(axis=0)
-#             if self.plot_mean:
-#                 plot_possibly_znormed(feature_mean)
-#         if self.plot_var or self.plot_relvar:
-#             feature_var = self.displayed_features.var(axis=0)
-#             if self.plot_var:
-#                 plot_possibly_znormed(feature_var)
-#         if self.plot_sd or self.plot_cv:
-#             feature_sd = self.displayed_features.std(axis=0)
-#             if self.plot_sd:
-#                 plot_possibly_znormed(feature_sd)
-#         if self.plot_relvar:
-#             feature_relvar = feature_var / feature_mean
-#             plot_possibly_znormed(feature_relvar)
-#         if self.plot_cv:
-#             feature_cv = feature_sd / feature_mean
-#             plot_possibly_znormed(feature_cv)
 
 class GeneModels(_BrowserSubPlot):
     def __init__(self,
                  gff3_filename,
-                 label='genes',
+                 label='Genes',
                  color='k',
                  chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
                  feature_sources=DEFAULT_FEATURE_SOURCES,
@@ -761,7 +727,8 @@ class GeneModels(_BrowserSubPlot):
                                 facecolor=self.color)
                             ax.add_patch(cds)
 
-            ax.set_yticks([])
+        ax.set_yticks([])
+        ax.set_ylabel(self.label)
 
 
 def compute_ax_row_positions(row_heights, ax_spacing=0.1):

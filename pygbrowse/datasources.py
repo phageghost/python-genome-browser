@@ -5,6 +5,7 @@ import pandas
 from scipy.signal import convolve
 
 from . import utilities
+from .utilities import log_print
 
 DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
 
@@ -49,7 +50,7 @@ class _DataSource:
         print('Stub method -- must be overridden by inheritors')
 
     def query(self, query_chrom, query_start, query_end):
-        result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
+        result: pandas.Series = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
         if self.convolution_kernel is not None:
             result = pandas.Series(convolve(result, self.convolution_kernel, mode='same'), index=result.index)
         if self.transform:
@@ -124,8 +125,61 @@ class TagDirectory(_DataSource):
 
 
 class IntervalData:
-    def __init__(self):
-        pass
+    HOMER_PEAKFILE_HEADER_ROW = 39
+    HOMER_PEAKFILE_COLUMN_RENAMER = {'chr': 'chrom', 'start': 'chromStart', 'end': 'chromEnd'}
+    HOMER_ANNOTATEDPEAKS_COLUMN_RENAMER = {'Chr': 'chrom', 'Start': 'chromStart', 'End': 'chromEnd', 'Strand': 'strand'}
 
-    def query(self, query_chrom, query_start, query_end):
-        pass
+    def __init__(self, interval_data, format='bed'):
+        try:
+            _ = interval_data.loc[:, ['chrom', 'chromStart', 'chromEnd', 'strand']]
+
+        except KeyError:  # maybe it's a BED DataFrame without column names?
+            log_print('Guessing this is a BED-style DataFrame without column names')
+
+            assert interval_data.shape[1] >= 3, 'Not enough column'
+
+            if interval_data.shape[1] >= 6:  # assume name is still separate column
+                self.data = interval_data.copy()
+                self.data.columns = ['chrom', 'chromStart', 'chromEnd', 'name',
+                                     'score', 'strand'] + list(self.data.columns)[6:]
+                self.data.index = self.data['name']
+
+            elif interval_data.shape[1] == 5:  # assume name has been made the index and deleted from the columns
+                self.data = interval_data.copy()
+                self.data.columns = ['chrom', 'chromStart', 'chromEnd', 'score',
+                                     'strand']
+            else:
+                self.data = interval_data.copy()
+                self.data.columns = ['chrom', 'chromStart', 'chromEnd', 'score',
+                                     'strand'][:interval_data.shape[1] - 5]
+
+            self.data.index.name = 'IntervalID'
+
+        except (AttributeError,):  # guessing it's a filename string
+            log_print('Guessing {} is a filename'.format(interval_data))
+            # if format == 'auto':
+            #     extension = filename.split('.')[-1]
+            #     if extension.lower() == 'bed':
+            #         format = 'bed'
+            #     elif extension.lower() == 'homer':
+            #         # ToDo: Add more sophisticated methods of detecting formats since, e.g. .txt can refer to many.
+            #         format = 'homer'
+            # ToDo: allow filename parameters to be file handles -- autodetect
+
+            if format == 'bed':
+                self.data = pandas.read_csv(interval_data, sep='\t', index_col=3, comment='#', header=None,
+                                            names=['chrom', 'chromStart', 'chromEnd', 'score', 'strand'])
+            elif format == 'homer':
+                self.data = pandas.read_csv(interval_data, sep='\t', index_col=0, header=self.HOMER_PEAKFILE_HEADER_ROW)
+                self.data.index.name = self.data.index.name[1:]
+                self.data = self.data.rename(columns=self.HOMER_PEAKFILE_COLUMN_RENAMER)
+
+            elif format == 'homer_annotated':
+                self.data = pandas.read_csv(interval_data, index_col=0, sep='\t')
+                self.data.index.name = self.data.index.name.split(' ')[0]
+                self.data = self.data.rename(columns=self.HOMER_ANNOTATEDPEAKS_COLUMN_RENAMER)
+
+        else:  # seems to be a properly-formatted DataFrame so just  store it
+            self.data = interval_data
+
+        self.data = self.data.sort_values(['chrom', 'chromStart'])
