@@ -1,3 +1,5 @@
+![alt pygbrowse](https://raw.githubusercontent.com/phageghost/python-genome-browser/master/pygbrowse_logo_1_med_flat.png)
+
 # python-genome-browser
 Tools for making plots of genomic datasets in a genome-browser-like format.
 
