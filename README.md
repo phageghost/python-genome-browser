@@ -5,7 +5,7 @@ Tools for making plots of genomic datasets in a genome-browser-like format.
 
 ## What does it do?
 
-The python genome browser, AKA pygbrowse, makes it easy to generate aligned plots of genomic data. This is similar to software such as the Integrated Genome Viewer (IGV) from the Broad Institute <http://software.broadinstitute.org/software/igv/> or webserver-based public genome browsers such as the UCSC genome browser <http://genome.ucsc.edu> or the WashU Epigenome Browser <http://epigenomegateway.wustl.edu/<.
+The python genome browser, AKA pygbrowse, makes it easy to generate aligned plots of genomic data. This is similar to software such as the [Integrated Genome Viewer (IGV) from the Broad Institute](http://software.broadinstitute.org/software/igv/) or webserver-based public genome browsers such as the [UCSC genome browser](http://genome.ucsc.edu) or the [WashU Epigenome Browser](http://epigenomegateway.wustl.edu/).
 
 ## Typical use cases:
 
@@ -25,3 +25,4 @@ For a couple of reasons:
 
 Well, you _can_ browse, in a sense, by calling the visualizer with different sets of coordinates. But it's not really designed for the kind of interactive, dynamic browsing experience provided by the other tools -- as mentioned earlier it is optimzed for rendering static "browser snapshots". That being said, however, we may add controls to provide interactive browser functionality when used inside a Jupyter notebook in a future version . . .
 
+Logo makes use of clipart by Paula Washington at [AnimalsClipart.com](http://animalsclipart.com/pig-design/)
