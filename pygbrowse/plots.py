@@ -423,7 +423,7 @@ class GeneModels(_BrowserSubPlot):
                                sources=feature_sources, gene_types=gene_types, transcript_types=transcript_types,
                                component_types=component_types)
 
-    def _load_gene_models(self, gff3_filename, chromosome_name_converter, *, sources, gene_types,
+    def _load_gene_models(self, gff3_filename, chromosome_name_converter, sources, gene_types,
                           transcript_types, component_types):
         """
         Parse a GFF file, extract gene model information and store it in attributes.
@@ -772,7 +772,7 @@ class GenomePlotter:
         """
         self.subplot_objects = subplot_objects
 
-    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, *, ax_spacing=0.05, num_xticks=10,
+    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, ax_spacing=0.05, num_xticks=10,
                   seaborn_style=seaborn.axes_style(style='ticks',
                                                    rc={'axes.edgecolor': 'w', 'axes.facecolor': '#EAEAF2'})):
         """

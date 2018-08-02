@@ -50,7 +50,7 @@ class _DataSource:
         print('Stub method -- must be overridden by inheritors')
 
     def query(self, query_chrom, query_start, query_end):
-        result: pandas.Series = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
+        result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
         if self.convolution_kernel is not None:
             result = pandas.Series(convolve(result, self.convolution_kernel, mode='same'), index=result.index)
         if self.transform:
