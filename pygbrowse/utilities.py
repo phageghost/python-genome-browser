@@ -1,5 +1,6 @@
 import datetime
 import os
+import subprocess
 
 import numpy
 from scipy.stats import norm
@@ -126,6 +127,47 @@ def binary_search_tag_file(tag_filename, search_target):
         guess = tag_file.tell()
 
         return guess
+
+
+def bgzip_gff(gff3_fname, bgzipped_fname=''):
+    """
+    Compress a GFF3 file in block-gzip format (requires that bgzip be accessible on the current path).
+
+    If :param gff3_fname: ends with '.gz' assumes that the file is gzipped, otherwise assumes it is uncompressed.
+
+    :param gzipped_fname:
+    :param bgzipped_fname:
+    :return:
+    """
+    if not bgzipped_fname:
+        bgzipped_fname = gff3_fname
+
+    cmd_line = '{} {} | sort -k1,1 -k4,4n | bgzip > {}'.format(('cat', 'zcat')[gff3_fname.endswith('.gz')], gff3_fname,
+                                                               bgzipped_fname)
+
+    try:
+        subprocess.check_call(cmd_line, shell=True)
+    except subprocess.CalledProcessError as cpe:
+        log_print('Unsuccessful. Got return code {}'.format(cpe.returncode))
+    else:
+        log_print('Successfully generated block-gzipped file {} from {}'.format(bgzipped_fname, gff3_fname))
+
+
+def generate_tabix_index(target_fname):
+    """
+    Index :param target_fname: with tabix. Requires that the directory in which :param:target_fname: resides is
+    writeable.
+
+    :param target_fname:
+    :return:
+    """
+    cmd_line = 'tabix -f -p gff {}'.format(target_fname)
+    try:
+        subprocess.check_call(cmd_line, shell=False)
+    except subprocess.CalledProcessError as cpe:
+        log_print('Unsuccessful. Got return code {}'.format(cpe.returncode))
+    else:
+        log_print('Successfully indexed block-gzipped file {}'.format(target_fname))
 
 
 def pretty_now():

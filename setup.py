@@ -20,7 +20,7 @@ setuptools.setup(name='pygbrowse',
                  author_email='pygbrowse@phageghost.net',
                  license='MIT',
                  packages=['pygbrowse'],
-                 install_requires=['numpy', 'scipy', 'pandas', 'matplotlib', 'seaborn', 'intervaltree'],
+                 install_requires=['numpy', 'scipy', 'pandas', 'matplotlib', 'seaborn', 'intervaltree', 'pysam'],
                  zip_safe=False,
                  classifiers=(
                      "Programming Language :: Python :: 3",
