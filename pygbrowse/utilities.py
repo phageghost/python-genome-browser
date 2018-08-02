@@ -61,7 +61,7 @@ def convert_chromosome_name(chrom_string, dialect='ucsc'):
 
 def binary_search_tag_file(tag_filename, search_target):
     """
-    Find the offset (in bytes) in :param:`tagf_filename` that corresponds
+    Find the offset (in bytes) in :param:`tag_filename` that corresponds
     to the start of the first tag that is equal to or greater than :param:`search_target`.
 
     If none of the reads have a start position greater than :param:`search_target`,
@@ -124,9 +124,6 @@ def binary_search_tag_file(tag_filename, search_target):
         tag_file.seek(guess)
         _ = tag_file.readline()
         guess = tag_file.tell()
-        thisline = tag_file.readline()
-
-        # print('final:', guess, thisline)
 
         return guess
 
@@ -140,7 +137,7 @@ def pretty_now():
 
 def log_print(message, tabs=1):
     """
-    Print a chunk of text preceded by the timestamp and an optional number of tabs.
+    Print a chunk of text preceded by a timestamp and an optional number of tabs (default 1).
 
     :param message:
     :param tabs:
