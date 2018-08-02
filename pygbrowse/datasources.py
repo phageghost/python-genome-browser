@@ -2,17 +2,23 @@ import os
 
 import numpy
 import pandas
+import pysam
 from scipy.signal import convolve
 
 from . import utilities
 from .utilities import log_print
 
 DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
-
+DEFAULT_FEATURE_SOURCES = ('ensembl', 'havana', 'ensembl_havana')
+DEFAULT_GENE_TYPES = ('gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript')
+DEFAULT_TRANSCRIPT_TYPES = ('transcript', 'lincRNA', 'mRNA')
+DEFAULT_COMPONENT_TYPES = ('CDS', 'three_prime_UTR', 'five_prime_UTR')
+DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT = 5
 
 # ToDo: For each class, allow option of loading into memory or leaving on disk (where applicable)
 # ToDo: Add a transform function and smoothing.
 # ToDo: Add indexing of on-disk csv-like files
+
 
 class _ChromWrapper:
     def __init__(self, chrom, parent_data_source):
@@ -22,10 +28,10 @@ class _ChromWrapper:
     def __getitem__(self, key):
         # print(key)
         # ToDo: Add support for step argument
-        try:
+        try:  # See if key is a slice
             query_start = key.start
             query_end = key.stop
-        except TypeError:  # Handle scalar indices
+        except TypeError:  # if not, treat as a scalar index
             query_start = key
             query_end = key + 1
 
@@ -37,7 +43,7 @@ class _DataVector:
         self.loc = _ChromWrapper(chrom=chrom, parent_data_source=parent_data_source)
 
 
-class _DataSource:
+class _VectorDataSource:
     # ToDo: Add methods for arithmetic and such, as done for old Pileups class
     def __init__(self, transform=None, smoothing_bandwidth=0):
         self.transform = transform
@@ -61,7 +67,7 @@ class _DataSource:
         return _DataVector(chrom=key, parent_data_source=self)
 
 
-class TagDirectory(_DataSource):
+class TagDirectory(_VectorDataSource):
     tag_strand_translator = {0: '+', 1: '-'}
 
     def __init__(self, tag_directory_path, normalize_to=DEFAULT_TAG_COUNT_NORMALIZATION_TARGET, transform=None,
@@ -200,3 +206,111 @@ class IntervalData:
             self.data = interval_data
 
         self.data = self.data.sort_values(['chrom', 'chromStart'])
+
+
+class GeneModels():
+    def __init__(self):
+        pass
+
+    def _query(self, query_chromosome, query_start, query_end):
+        print('Must be overridden by inheritors!')
+
+    def query(self, chromosome, start, end):
+        return self._query(query_chromosome=chromosome, query_start=start, query_end=end)
+
+
+class Gff3Annotations(GeneModels):
+    def __init__(self,
+                 gff3_filename,
+                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
+                 feature_sources=DEFAULT_FEATURE_SOURCES,
+                 gene_types=DEFAULT_GENE_TYPES,
+                 transcript_types=DEFAULT_TRANSCRIPT_TYPES,
+                 component_types=DEFAULT_COMPONENT_TYPES,
+                 maximum_transcript_support=DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT):
+
+        super(Gff3Annotations, self).__init__()
+
+        self.tabix_file = pysam.TabixFile(gff3_filename)
+        self.chromosome_name_converter = chromosome_name_converter
+        self.feature_sources = feature_sources
+        self.gene_types = gene_types
+        self.transcript_types = transcript_types
+        self.component_types = component_types
+        self.maximum_transcript_support = maximum_transcript_support
+
+    def _query(self, query_chromosome, query_start, query_end):
+        gene_names_to_ensembl_ids = {}
+        genes = {}
+        transcripts = {}
+        components = {}
+        component_num = 0  # serial index for components without IDs
+
+        query_rows = self.tabix_file.fetch(query_chromosome, query_start, query_end)
+
+        for line in query_rows:
+            split_line = line.strip('\n').split('\t')
+            source, feature_type = split_line[1], split_line[2]
+
+            if source in self.feature_sources:
+                contig = self.chromosome_name_converter(split_line[0])
+                start = int(split_line[3])
+                end = int(split_line[4])
+                strand = split_line[6]
+
+                fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
+                # print(line_num, line)
+                if feature_type in self.gene_types:
+                    ensembl_id = fields['ID']
+                    gene_name = fields['Name']
+                    #                     assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
+                    #                                                                                                     line_num)
+
+                    genes[ensembl_id] = {'contig': contig,
+                                         'start': start - 1,  # convert 1-based to 0-based
+                                         'end': end,
+                                         'strand': strand,
+                                         'transcripts': []}
+
+                    genes[ensembl_id].update(fields)
+                    if gene_name not in gene_names_to_ensembl_ids:
+                        gene_names_to_ensembl_ids[gene_name] = []
+                    gene_names_to_ensembl_ids[gene_name].append(ensembl_id)
+                    # print('\t added gene {}'.format(ensembl_id))
+
+                elif feature_type in self.transcript_types:
+                    parent = fields['Parent']
+                    # print('\ttranscript parent {}'.format(parent))
+                    transcript_support_level = int(fields['transcript_support_level'].split(' ')[0])
+                    if parent in genes and transcript_support_level < self.maximum_transcript_support:
+                        ensembl_id = fields['ID']
+                        transcripts[ensembl_id] = {'contig': contig,
+                                                   'start': start - 1,  # convert 1-based to 0-based
+                                                   'end': end,
+                                                   'strand': strand,
+                                                   'components': []}
+                        transcripts[ensembl_id].update(fields)
+
+                        genes[parent]['transcripts'].append(ensembl_id)
+                        # print('\t added transcript {} with parent {}'.format(ensembl_id, parent))
+
+
+                elif feature_type in self.component_types:
+                    parent = fields['Parent']
+                    # print('\thas parent {}. {}'.format(parent, parent in transcripts))
+                    if parent in transcripts:
+                        if 'exon_id' in fields:
+                            ensembl_id = fields['exon_id']
+                        else:
+                            ensembl_id = str(component_num)
+                            component_num += 1
+
+                        components[ensembl_id] = {'contig': contig,
+                                                  'start': start - 1,  # convert 1-based to 0-based
+                                                  'end': end,
+                                                  'strand': strand,
+                                                  'type': feature_type}
+                        components[ensembl_id].update(fields)
+                        transcripts[parent]['components'].append(ensembl_id)
+
+        return genes, transcripts, components, gene_names_to_ensembl_ids

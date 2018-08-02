@@ -1,5 +1,3 @@
-import gzip
-
 import intervaltree
 import matplotlib
 import matplotlib.pyplot as plt
@@ -10,15 +8,9 @@ import scipy.signal
 import seaborn
 
 from . import utilities
-from .intervaldict import IntervalDict
-from .utilities import log_print
 
 DEFAULT_ARC_POINTS = 200
 CHROMOSOME_DIALECT = 'ucsc'
-DEFAULT_FEATURE_SOURCES = {'ensembl', 'havana', 'ensembl_havana'}
-DEFAULT_GENE_TYPES = {'gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript'}
-DEFAULT_TRANSCRIPT_TYPES = {'transcript', 'lincRNA', 'mRNA'}
-DEFAULT_COMPONENT_TYPES = {'CDS', 'three_prime_UTR', 'five_prime_UTR'}
 
 
 # ToDo: Move this stuff to a separate module so we can delete wholesale when the Ellipse class gets fixed.
@@ -260,7 +252,7 @@ class BedPlot(_BrowserSubPlot):
     START_COL_NUM = 1
     END_COL_NUM = 2
 
-    def __init__(self, interval_data_object,
+    def __init__(self, interval_data,
                  label='',
                  cmap='RdBu_r',
                  baseline=0.5,
@@ -278,7 +270,7 @@ class BedPlot(_BrowserSubPlot):
         """
         super(BedPlot, self).__init__()
 
-        self.interval_data = interval_data_object.data
+        self.interval_data = interval_data.data
         self.color = color
 
         self.color_by = color_by
@@ -341,11 +333,11 @@ class BedPlot(_BrowserSubPlot):
 
 class WigPlot(_BrowserSubPlot):
     # ToDo: Add support for stranded data
-    def __init__(self, data, label=None, color=None, center_vector=False, scale_vector_to_plot=False,
+    def __init__(self, genomic_vector_data, label=None, color=None, center_vector=False, scale_vector_to_plot=False,
                  # ylim=None,
                  smoothing_bandwidth=0):
         super(WigPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
-        self.data = data
+        self.data = genomic_vector_data
         self.color = color
         self.center = center_vector
         self.scale_vector_to_plot = scale_vector_to_plot
@@ -388,16 +380,11 @@ class WigPlot(_BrowserSubPlot):
             ax.set_ylabel(self.label)
 
 
-class GeneModels(_BrowserSubPlot):
+class GeneModelPlot(_BrowserSubPlot):
     def __init__(self,
-                 gff3_filename,
+                 gene_annotation_data,
                  label='Genes',
                  color='k',
-                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
-                 feature_sources=DEFAULT_FEATURE_SOURCES,
-                 gene_types=DEFAULT_GENE_TYPES,
-                 transcript_types=DEFAULT_TRANSCRIPT_TYPES,
-                 component_types=DEFAULT_COMPONENT_TYPES,
                  feature_height=0.12,
                  chevron_height=0.05,
                  chevron_width=0.04,
@@ -406,11 +393,12 @@ class GeneModels(_BrowserSubPlot):
                  utr_endcap_width=0.04,
                  gene_name_fontsize=8):
 
-        super(GeneModels, self).__init__()
+        super(GeneModelPlot, self).__init__()
+
+        self.gene_annotation_data = gene_annotation_data
 
         self.color = color
         self.label = label
-
         self.feature_height = feature_height  # in inches
         self.chevron_height = chevron_height  # in inches
         self.chevron_width = chevron_width  # in inches
@@ -418,105 +406,6 @@ class GeneModels(_BrowserSubPlot):
         self.truncation_size = truncation_size  # in inches
         self.utr_endcap_width = utr_endcap_width  # in inches
         self.gene_name_fontsize = gene_name_fontsize
-
-        self._load_gene_models(gff3_filename=gff3_filename, chromosome_name_converter=chromosome_name_converter,
-                               sources=feature_sources, gene_types=gene_types, transcript_types=transcript_types,
-                               component_types=component_types)
-
-    def _load_gene_models(self, gff3_filename, chromosome_name_converter, sources, gene_types,
-                          transcript_types, component_types):
-        """
-        Parse a GFF file, extract gene model information and store it in attributes.
-        """
-        gene_names_to_ensembl_ids = {}
-        genes = {}
-        transcripts = {}
-        components = {}
-        component_num = 0  # incrementing component id
-
-        # ToDo: Benchmark against using pandas or csv (or BCBio.GFF if I can get it to run.)
-        log_print('Loading gene model information from {}. This may take a few minutes ...'.format(gff3_filename))
-
-        if gff3_filename.endswith('.gz'):
-            gff_file_handle = gzip.open(gff3_filename, 'rt')
-        else:
-            gff_file_handle = open(gff3_filename, 'rt')
-
-        for line_num, line in enumerate(gff_file_handle):
-            if line_num == 0: assert line.split(' ')[0] == '##gff-version' and line.endswith(
-                '3\n'), 'This does not appear to be a GFF 3 file!'
-            # Parse non-headers
-            if line[0] != '#':
-                split_line = line.strip('\n').split('\t')
-                if len(split_line) < 7:
-                    print('Column error on line {}: {}'.format(line_num, split_line))
-
-                source, feature_type = split_line[1], split_line[2]
-
-                if source in sources:
-                    contig = chromosome_name_converter(split_line[0])
-                    start = int(split_line[3])
-                    end = int(split_line[4])
-                    strand = split_line[6]
-
-                    fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
-                    # print(line_num, line)
-                    if feature_type in gene_types:
-                        ensembl_id = fields['ID']
-                        gene_name = fields['Name']
-                        assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
-                                                                                                        line_num)
-
-                        genes[ensembl_id] = {'contig': contig,
-                                             'start': start - 1,  # convert 1-based to 0-based
-                                             'end': end,
-                                             'strand': strand,
-                                             'transcripts': []}
-
-                        genes[ensembl_id].update(fields)
-                        if gene_name not in gene_names_to_ensembl_ids:
-                            gene_names_to_ensembl_ids[gene_name] = []
-                        gene_names_to_ensembl_ids[gene_name].append(ensembl_id)
-                        # print('\t added gene {}'.format(ensembl_id))
-
-                    elif feature_type in transcript_types:
-                        parent = fields['Parent']
-                        # print('\ttranscript parent {}'.format(parent))
-                        if parent in genes:
-                            ensembl_id = fields['ID']
-                            transcripts[ensembl_id] = {'contig': contig,
-                                                       'start': start - 1,  # convert 1-based to 0-based
-                                                       'end': end,
-                                                       'strand': strand,
-                                                       'components': []}
-                            transcripts[ensembl_id].update(fields)
-
-                            genes[parent]['transcripts'].append(ensembl_id)
-                            # print('\t added transcript {} with parent {}'.format(ensembl_id, parent))
-
-
-                    elif feature_type in component_types:
-                        parent = fields['Parent']
-                        # print('\thas parent {}. {}'.format(parent, parent in transcripts))
-                        if parent in transcripts:
-                            if 'exon_id' in fields:
-                                ensembl_id = fields['exon_id']
-                            else:
-                                ensembl_id = str(component_num)
-                                component_num += 1
-
-                            components[ensembl_id] = {'contig': contig,
-                                                      'start': start - 1,  # convert 1-based to 0-based
-                                                      'end': end,
-                                                      'strand': strand,
-                                                      'type': feature_type}
-                            components[ensembl_id].update(fields)
-                            transcripts[parent]['components'].append(ensembl_id)
-
-        self.genes = IntervalDict(genes)
-        self.transcripts = IntervalDict(transcripts)
-        self.components = IntervalDict(components)
-        self.gene_names_to_ensembl_ids = gene_names_to_ensembl_ids
 
     @staticmethod
     def _arrange_genes(gene_data_list):
@@ -545,9 +434,10 @@ class GeneModels(_BrowserSubPlot):
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         # find overlapping genes
-        # ToDo: instead of intervaltrees, use intervaloverlaps module to answer these queries
-        overlapping_genes = self.genes.overlapping(chrom, ws, we)
-        overlapping_components = self.components.overlapping(chrom, ws, we)
+        overlapping_genes, overlapping_transcripts, overlapping_components, ids_to_names = self.gene_annotation_data.query(
+            chrom, ws, we)
+        # overlapping_genes = self.genes.overlapping(chrom, ws, we)
+        # overlapping_components = self.components.overlapping(chrom, ws, we)
 
         gene_display_levels = self._arrange_genes(overlapping_genes.values())
         ax.set_ylim((-0.5, len(gene_display_levels) - 1 + 0.5))
@@ -649,23 +539,21 @@ class GeneModels(_BrowserSubPlot):
                     ax.add_patch(rarr2)
 
                 # Identify components belonging to this gene
-                this_gene_components = set([])
-                for transcript_id in gene_data['transcripts']:
-                    for component_id in self.transcripts[transcript_id]['components']:
-                        if component_id in overlapping_components:
-                            #                         print('\t' + component_id)
-                            this_gene_components.add(component_id)
+                # this_gene_components = set([])
+                # for transcript_id in gene_data['transcripts']:
+                #     for component_id in overlapping_components:
+                #         this_gene_components.add(component_id)
 
                 # plot components
-                for component_id in this_gene_components:
-                    component_data = self.components[component_id]
+                for component_id in overlapping_components:
+                    component_data = overlapping_components[component_id]
                     #                     print('\t', component_id, component_data)
                     if ((component_data['start'] >= visible_gene_start) and (
                             component_data['start'] <= visible_gene_end)) or (
                             (component_data['end'] >= visible_gene_start) and (
                             component_data['end'] <= visible_gene_end)):
 
-                        # ToDo: systematize and condense the following
+                        # ToDo: systematize and condense the following:
                         if component_data['type'] == 'five_prime_UTR':
                             # plot the "body" of the UTR
                             if gene_data['strand'] == '+':
