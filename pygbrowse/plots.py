@@ -648,7 +648,7 @@ def compute_ax_row_positions(row_heights, ax_spacing=0.1):
     return bottoms, heights
 
 
-class GenomePlotter:
+class GenomeBrowser:
     VECTOR_LEGEND_LOC = 0
 
     def __init__(self, subplot_objects):
@@ -660,7 +660,11 @@ class GenomePlotter:
         """
         self.subplot_objects = subplot_objects
 
-    def visualize(self, chrom, start, end, fig_width=12, row_heights=1, ax_spacing=0.05, num_xticks=10,
+    def visualize(self, chrom, start, end,
+                  fig_width=12,
+                  row_heights=1,
+                  ax_spacing=0.05,
+                  num_xticks=10,
                   seaborn_style=seaborn.axes_style(style='ticks',
                                                    rc={'axes.edgecolor': 'w', 'axes.facecolor': '#EAEAF2'})):
         """

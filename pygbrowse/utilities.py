@@ -129,7 +129,7 @@ def binary_search_tag_file(tag_filename, search_target):
         return guess
 
 
-def bgzip_gff(gff3_fname, bgzipped_fname=''):
+def bgzip_gff(gff3_fname, bgzipped_fname):
     """
     Compress a GFF3 file in block-gzip format (requires that bgzip be accessible on the current path).
 

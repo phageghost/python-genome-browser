@@ -15,7 +15,9 @@ DEFAULT_GENE_TYPES = (
 'processed_transcript')
 DEFAULT_TRANSCRIPT_TYPES = ('mRNA', 'transcript', 'lincRNA', 'lnc_RNA', 'miRNA', 'ncRNA', 'snRNA', 'snoRNA')
 DEFAULT_COMPONENT_TYPES = ('CDS', 'three_prime_UTR', 'five_prime_UTR')
-DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT = 5
+
+
+# DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT = 5
 
 # ToDo: For each class, allow option of loading into memory or leaving on disk (where applicable)
 # ToDo: Add a transform function and smoothing.
@@ -210,7 +212,7 @@ class IntervalData:
         self.data = self.data.sort_values(['chrom', 'chromStart'])
 
 
-class GeneModels():
+class _GeneModels():
     def __init__(self):
         pass
 
@@ -221,25 +223,28 @@ class GeneModels():
         return self._query(query_chromosome=chromosome, query_start=start, query_end=end)
 
 
-class Gff3Annotations(GeneModels):
+class Gff3Annotations(_GeneModels):
     def __init__(self,
                  gff3_filename,
-                 chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
+                 incoming_chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ensembl'),
+                 outgoing_chromosome_name_converter=lambda x: utilities.convert_chromosome_name(x, dialect='ucsc'),
                  feature_sources=DEFAULT_FEATURE_SOURCES,
                  gene_types=DEFAULT_GENE_TYPES,
                  transcript_types=DEFAULT_TRANSCRIPT_TYPES,
                  component_types=DEFAULT_COMPONENT_TYPES,
-                 maximum_transcript_support=DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT):
+                 # maximum_transcript_support=DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT
+                 ):
 
         super(Gff3Annotations, self).__init__()
 
         self.tabix_file = pysam.TabixFile(gff3_filename)
-        self.chromosome_name_converter = chromosome_name_converter
+        self.incoming_chromosome_name_converter = incoming_chromosome_name_converter
+        self.outgoing_chromosome_name_converter = outgoing_chromosome_name_converter
         self.feature_sources = feature_sources
         self.gene_types = gene_types
         self.transcript_types = transcript_types
         self.component_types = component_types
-        self.maximum_transcript_support = maximum_transcript_support
+        # self.maximum_transcript_support = maximum_transcript_support
 
     def _query(self, query_chromosome, query_start, query_end):
         gene_names_to_ensembl_ids = {}
@@ -248,14 +253,15 @@ class Gff3Annotations(GeneModels):
         components = {}
         component_num = 0  # serial index for components without IDs
 
-        query_rows = self.tabix_file.fetch(query_chromosome, query_start, query_end)
+        query_rows = self.tabix_file.fetch(self.incoming_chromosome_name_converter(query_chromosome), query_start,
+                                           query_end)
 
         for line in query_rows:
             split_line = line.strip('\n').split('\t')
             source, feature_type = split_line[1], split_line[2]
 
             if source in self.feature_sources:
-                contig = self.chromosome_name_converter(split_line[0])
+                contig = split_line[0]
                 start = int(split_line[3])
                 end = int(split_line[4])
                 strand = split_line[6]
@@ -283,8 +289,14 @@ class Gff3Annotations(GeneModels):
                 elif feature_type in self.transcript_types:
                     parent = fields['Parent']
                     # print('\ttranscript parent {}'.format(parent))
-                    transcript_support_level = int(fields['transcript_support_level'].split(' ')[0])
-                    if parent in genes and transcript_support_level < self.maximum_transcript_support:
+                    # try:
+                    #     transcript_support_level = int(fields['transcript_support_level'].split(' ')[0])
+                    # except ValueError:
+                    #     passed_support_filter = False
+                    # else:
+                    #     passed_support_filter = transcript_support_level < self.maximum_transcript_support
+
+                    if parent in genes:
                         ensembl_id = fields['ID']
                         transcripts[ensembl_id] = {'contig': contig,
                                                    'start': start - 1,  # convert 1-based to 0-based
