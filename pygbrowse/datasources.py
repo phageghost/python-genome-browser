@@ -10,8 +10,10 @@ from .utilities import log_print
 
 DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
 DEFAULT_FEATURE_SOURCES = ('ensembl', 'havana', 'ensembl_havana')
-DEFAULT_GENE_TYPES = ('gene', 'mt_gene', 'lincRNA_gene', 'processed_transcript')
-DEFAULT_TRANSCRIPT_TYPES = ('transcript', 'lincRNA', 'mRNA')
+DEFAULT_GENE_TYPES = (
+'gene', 'RNA', 'mt_gene', 'lincRNA_gene', 'miRNA_gene', 'ncRNA_gene', 'rRNA_gene', 'snRNA_gene', 'snoRNA_gene',
+'processed_transcript')
+DEFAULT_TRANSCRIPT_TYPES = ('mRNA', 'transcript', 'lincRNA', 'lnc_RNA', 'miRNA', 'ncRNA', 'snRNA', 'snoRNA')
 DEFAULT_COMPONENT_TYPES = ('CDS', 'three_prime_UTR', 'five_prime_UTR')
 DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT = 5
 

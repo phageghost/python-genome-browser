@@ -139,16 +139,21 @@ def bgzip_gff(gff3_fname, bgzipped_fname=''):
     :param bgzipped_fname:
     :return:
     """
-    if not bgzipped_fname:
-        bgzipped_fname = gff3_fname
+    if bgzipped_fname == gff3_fname:
+        log_print('Destination and source file cannot have the same name!')
 
     cmd_line = '{} {} | sort -k1,1 -k4,4n | bgzip > {}'.format(('cat', 'zcat')[gff3_fname.endswith('.gz')], gff3_fname,
                                                                bgzipped_fname)
-
     try:
+        assert os.path.isfile(gff3_fname)  # needed since no error occurs otherwise
         subprocess.check_call(cmd_line, shell=True)
+
     except subprocess.CalledProcessError as cpe:
         log_print('Unsuccessful. Got return code {}'.format(cpe.returncode))
+
+    except AssertionError:
+        log_print('{} not found!'.format(gff3_fname))
+
     else:
         log_print('Successfully generated block-gzipped file {} from {}'.format(bgzipped_fname, gff3_fname))
 
@@ -163,7 +168,7 @@ def generate_tabix_index(target_fname):
     """
     cmd_line = 'tabix -f -p gff {}'.format(target_fname)
     try:
-        subprocess.check_call(cmd_line, shell=False)
+        return_code = subprocess.check_call(cmd_line, shell=True)
     except subprocess.CalledProcessError as cpe:
         log_print('Unsuccessful. Got return code {}'.format(cpe.returncode))
     else:
