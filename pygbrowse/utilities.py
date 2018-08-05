@@ -212,3 +212,82 @@ def gaussian_kernel(sd, sd_cutoff=3, normalize=False):
     if normalize:
         kern = kern / kern.max()
     return kern
+
+    
+def add_label(ax, tick, tick_label, axis='x'):
+    """
+    Updates the set of ticks and tick labels for the specified matplotlib.Axes object
+    and axis.
+    
+    If the tick already exists, it's label will be updated. If not, it will be created and labeled
+    appropriately.
+    
+    """
+    if axis == 'y':
+        tick_getter, label_getter = ax.get_yticks, ax.get_yticklabels
+        tick_setter, label_setter = ax.set_yticks, ax.set_yticklabels
+    else:
+        tick_getter, label_getter = ax.get_xticks, ax.get_xticklabels
+        tick_setter, label_setter = ax.set_xticks, ax.set_xticklabels
+            
+    labels = dict(zip(tick_getter(), label_getter()))
+    labels[tick] = tick_label
+    new_ticks, new_labels = zip(*sorted(labels.items()))
+    tick_setter(new_ticks)
+    label_setter(new_labels)
+
+    
+def adjust_limits(ax, new_position, axis='y', padding_fraction=0.1):
+    """
+    If necessary adjusts the limits for the specified :param axis: on 
+    :param ax: to accomodate :param new_position: according to the 
+    following scheme:
+    
+    1. Assumes that the current limits are the 
+        smallest and largest content item minus / plus a padding equal to
+        :param padding_fraction: * the span between the smallest
+        and largest content item.
+    2. If :param new_position: is beyond the inferred content limits,
+        adjust the padding to :param padding_fraction: * the new content
+        span, then adjust the plot limits to the new content limits
+        minus / plus the new padding.      
+    """
+    assert padding_fraction < 0.5, 'padding_fraction must be below 0.5!'
+    
+    if axis == 'y':
+        limit_getter = ax.get_ylim
+        limit_setter = ax.set_ylim
+    else:
+        limit_getter = ax.get_xlim
+        limit_setter = ax.set_xlim
+        
+    current_plot_min, current_plot_max = limit_getter()
+    current_plot_span = current_plot_max - current_plot_min
+    current_data_span = current_plot_span / (1 + 2 * padding_fraction)
+    current_pad = current_data_span * padding_fraction
+    current_data_min = current_plot_min + current_pad
+    current_data_max = current_plot_max - current_pad
+    
+#     print(current_plot_min, current_plot_max, current_plot_span)
+#     print(current_data_min, current_data_max, current_data_span, current_pad)
+    
+    if new_position > current_data_max:
+        new_data_min = current_data_min
+        new_data_max = new_position
+    
+    elif new_position < current_data_min:
+        new_data_min = new_position
+        new_data_max = current_data_max
+    else:
+        # no changes needed
+        return
+    
+    new_data_span = new_data_max - new_data_min
+    new_pad = new_data_span * padding_fraction
+    new_plot_min = new_data_min - new_pad
+    new_plot_max = new_data_max + new_pad
+    
+#     print(new_data_min, new_data_max, new_data_span, new_pad)
+#     print(new_plot_min, new_plot_max)
+
+    limit_setter((new_plot_min, new_plot_max))    

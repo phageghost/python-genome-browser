@@ -260,6 +260,7 @@ class BedPlot(_BrowserSubPlot):
                  color_by='',
                  display_value='',
                  patch_height=0.5,
+                 pad_fraction=0.1,
                  patch_kwargs=None):
         """
         Takes an iterable of tuples in the form:
@@ -272,6 +273,7 @@ class BedPlot(_BrowserSubPlot):
 
         self.interval_data = interval_data.data
         self.color = color
+        self.pad_fraction = pad_fraction
 
         self.color_by = color_by
         if self.color_by:
@@ -301,9 +303,15 @@ class BedPlot(_BrowserSubPlot):
         ylim = ax.get_ylim()
         vert_span = ylim[1] - ylim[0]
 
-        ax.set_yticks(list(ax.get_yticks()) + [self.baseline])
-        ax.set_yticklabels(list(ax.get_yticklabels()) + [self.label])
-
+        # ax.set_yticks(list(ax.get_yticks()) + [self.baseline])
+        # print(list(ax.get_yticklabels()))
+        # print(self.label,list(ax.get_yticklabels()) + [self.label]) 
+        # ax.set_yticklabels(list(ax.get_yticklabels()) + [self.label])
+        # print(list(ax.get_yticklabels()))
+        
+        utilities.add_label(ax=ax, tick=self.baseline, tick_label=self.label, axis='y')
+        
+        
         visible_intervals = self.interval_data.loc[(self.interval_data.chrom == chrom) & (
                 ((ws <= self.interval_data.chromStart) & (self.interval_data.chromStart <= we)) | (
                 (ws <= self.interval_data.chromEnd) & (self.interval_data.chromEnd <= we)))]
@@ -325,9 +333,14 @@ class BedPlot(_BrowserSubPlot):
             if self.display_value:
                 ax.text(x=(start_loc + end_loc) / 2, y=self.baseline,
                         s='{:>0.2}'.format(self.interval_data.loc[interval_name, self.display_value]), ha='center')
+                        
+        utilities.adjust_limits(ax=ax, new_position=self.baseline + self.patch_height / 2, 
+                                axis='y', padding_fraction=self.pad_fraction)
+        utilities.adjust_limits(ax=ax, new_position=self.baseline - self.patch_height / 2, 
+                                axis='y', padding_fraction=self.pad_fraction)
 
         # ax.set_ylim(0, 1)
-        ax.set_ylabel(self.label)
+        #ax.set_ylabel(self.label)
 
 
 
@@ -346,8 +359,6 @@ class WigPlot(_BrowserSubPlot):
             self.convolution_kernel = utilities.gaussian_kernel(smoothing_bandwidth)
         else:
             self.convolution_kernel = None
-        # self.ylim = ylim
-        # self.normalization_factor = 1
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
