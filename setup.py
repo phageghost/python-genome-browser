@@ -1,6 +1,6 @@
 import setuptools
 
-VER = '0.2.1'
+VER = '0.3.0'
 AUTHOR = 'Dylan Skola'
 
 print('*' * 80)

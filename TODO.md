@@ -13,9 +13,9 @@
 	1. Add arbitrary interactions (not confined to bins). Plot "arbitrary bins" (start-end)
     2. Ensure current parser is compatible with BED-PE
 4. General
-    1. Add flag for fill-beneath and make default.
     2. Shrink logo.
     3. Look into eliminating requirement for seaborn (at this point I think we only use the styles).
 	4. Add plotter for diagonal Hi-C matrices
+	5. Add parameter for subplots to share yaxis limits.
 	
     

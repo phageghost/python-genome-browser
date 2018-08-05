@@ -346,12 +346,14 @@ class BedPlot(_BrowserSubPlot):
 
 class WigPlot(_BrowserSubPlot):
     # ToDo: Add support for stranded data
-    def __init__(self, genomic_vector_data, label=None, color=None, center_vector=False, scale_vector_to_plot=False,
+    def __init__(self, genomic_vector_data, label=None, color=None, style='solid', alpha=1.0,  center_vector=False, scale_vector_to_plot=False,
                  # ylim=None,
                  smoothing_bandwidth=0):
         super(WigPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data = genomic_vector_data
         self.color = color
+        self.style = style
+        self.alpha = alpha
         self.center = center_vector
         self.scale_vector_to_plot = scale_vector_to_plot
         self.label = label
@@ -383,10 +385,15 @@ class WigPlot(_BrowserSubPlot):
 
         this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
         this_plot_vector.name = self.label
-
-        ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
+        
+        if self.style == 'solid':
+            ax.fill_between(x=this_plot_vector.index, y1=this_plot_vector, color=self.color, label=self.label)
+        else:
+            ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
+        
         ax.autoscale(enable=True, axis='y')
 
+        # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:
             ax.set_ylabel(self.label)
 
