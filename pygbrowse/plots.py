@@ -346,7 +346,9 @@ class BedPlot(_BrowserSubPlot):
 
 class WigPlot(_BrowserSubPlot):
     # ToDo: Add support for stranded data
-    def __init__(self, genomic_vector_data, label=None, color=None, style='solid', alpha=1.0,  center_vector=False, scale_vector_to_plot=False,
+    def __init__(self, genomic_vector_data, label=None, color=None, style='solid', alpha=1.0,  
+                center_vector=False, scale_vector_to_plot=False,
+                label_rotation=0,
                  # ylim=None,
                  smoothing_bandwidth=0):
         super(WigPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
@@ -361,6 +363,8 @@ class WigPlot(_BrowserSubPlot):
             self.convolution_kernel = utilities.gaussian_kernel(smoothing_bandwidth)
         else:
             self.convolution_kernel = None
+        self.label_rotation = label_rotation  
+          
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
@@ -395,7 +399,7 @@ class WigPlot(_BrowserSubPlot):
 
         # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:
-            ax.set_ylabel(self.label)
+            ax.set_ylabel(self.label, rotation=self.label_rotation)
 
 
 class GeneModelPlot(_BrowserSubPlot):
@@ -741,6 +745,7 @@ class GenomeBrowser:
                 this_ax.set_xticks(numpy.arange(num_ticks) * xtick_increment + round_start)
                 this_ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
                 this_ax.set_xlabel('{} position'.format(chrom))
+                
             else:  # clear out xticks but plot objects can override this later
                 this_ax.set_xlabel('')
                 this_ax.set_xticks([])
@@ -752,7 +757,6 @@ class GenomeBrowser:
             this_ax.set_xlim(start, end)
 
             for plot_object in plot_object_subset:
-                # plot_object.set_globals(chrom=chrom, ws=ws, we=we, fig_width=fig_width, row_height=row_heights[ax_idx])
                 plot_object.plot(this_ax, chrom=chrom, ws=start, we=end, fig_width=fig_width,
                                  row_height=row_heights[ax_idx])
 
@@ -761,3 +765,63 @@ class GenomeBrowser:
             #     this_ax.legend(loc=self.VECTOR_LEGEND_LOC)
 
         return fig
+
+class HicPlotter:
+    def __init__(self, data, binsize, vertical_scale=1, cmap='YlOrRd', transform=lambda x: x**2, max_masked_diag=2):
+        self.data = data
+        self.binsize = binsize
+        self.cmap = cmap
+        self.transform = transform
+        self.max_masked_diag = max_masked_diag
+        self.vertical_scale = vertical_scale
+        
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+#         print(ax)
+#         print(ws, we)
+
+        visible_start_bin = toolbox.roundto(ws, binsize)
+        visible_end_bin = toolbox.roundto(we, binsize)
+
+#         print(visible_start_bin, visible_end_bin)
+
+        visible_span = visible_end_bin - visible_start_bin
+
+#         print(visible_span)
+
+        data_start_bin = visible_start_bin - visible_span // 2
+        data_end_bin = visible_end_bin + visible_span // 2
+
+#         print(data_start_bin, data_end_bin)
+        plot_data = self.data.query(chrom, data_start_bin, data_end_bin)
+        
+        for diag in range(self.max_masked_diag):
+            plot_data.values[my_diag_indices(plot_data.shape[0], diag)] = 0
+
+        plot_data = pandas.DataFrame(ndimage.rotate(plot_data, 45, reshape=False),
+                                     index=plot_data.index, columns=plot_data.columns)
+#         print(plot_data.shape)
+        
+        # Trim back to visible area
+        plot_data = plot_data.loc[visible_start_bin:visible_end_bin,visible_start_bin:visible_end_bin]
+        
+        # Only show upper diagonal
+        plot_data = plot_data.iloc[:-plot_data.shape[0] // 2,:]
+        
+#         return plot_data
+#         plot_data = plot_data[plot_data.shape[0] // 4:-plot_data.shape[0] // 2, plot_data.shape[1] // 4: -plot_data.shape[1] // 4]
+#         plot_data = plot_data[plot_data.shape[0] * (1-self.vertical_scale):]
+#         print(plot_data.shape)
+    
+        plot_data = self.transform(plot_data)
+        
+        # Re-index plot_data to allow it to play nicely with ax limits
+        
+#         plot_data = pandas.DataFrame(plot_data, columns=numpy.linspace(ws, we, num=plot_data.shape[1]))
+#         print(plot_data)
+#         print('Calling imshow on {}'.format(ax))
+        ax.set_ylim(0, plot_data.shape[1])
+        ax.imshow(plot_data, cmap=self.cmap, aspect='auto', extent=(ws, we, 0, plot_data.shape[1]))
+        ax.set_xticks([])
+#         print('Done on {}'.format(ax))
+        return plot_data
+        

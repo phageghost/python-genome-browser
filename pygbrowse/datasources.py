@@ -328,3 +328,40 @@ class Gff3Annotations(_GeneModels):
                         transcripts[parent]['components'].append(ensembl_id)
 
         return genes, transcripts, components, gene_names_to_ensembl_ids
+
+        
+class _MatrixData:
+    def __init__(self):
+        pass
+    
+    def _query(self):
+        print('Must be overridden by inheritors')
+        
+    def query(self, chrom, start, end):
+        return self._query(query_chrom=chrom, query_start=start, query_end=end)
+
+class HicDataDir(_MatrixData):
+    def __init__(self, 
+                 fname_template='/home/dskola/projects/coupled_peaks/hic/c57_hic_corrs_{}.tsv',
+                 binsize=10000):
+        self.fname_template = fname_template
+        self.binsize = binsize
+        
+    def _query(self, query_chrom, query_start, query_end):
+        this_chrom_fname = self.fname_template.format(query_chrom)
+        this_chrom_data = pandas.read_csv(this_chrom_fname, sep='\t', index_col=0)
+        
+        rounded_start = toolbox.roundto(query_start, binsize)
+        rounded_end = toolbox.roundto(query_end, binsize)
+
+        return this_chrom_data.loc[rounded_start:rounded_end, rounded_start:rounded_end]
+    
+class HicDataDict(_MatrixData):
+    def __init__(self, data_dict):
+        self.data_dict = data_dict
+        
+    def _query(self, query_chrom, query_start, query_end):
+        rounded_start = toolbox.roundto(query_start, binsize)
+        rounded_end = toolbox.roundto(query_end, binsize)
+        
+        return self.data_dict[query_chrom].loc[rounded_start:rounded_end, rounded_start:rounded_end]        
