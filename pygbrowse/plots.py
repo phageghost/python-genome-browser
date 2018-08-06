@@ -827,7 +827,7 @@ class HicPlotter:
         ax.set_ylim(0, plot_data.shape[1])
         ax.imshow(plot_data, cmap=self.cmap, aspect='auto', extent=(ws, we, 0, plot_data.shape[1]))
         ax.set_xticks([])
-        ax.set_ylabel(self.label, label_rotation=self.label_rotation)
+        ax.set_ylabel(self.label, rotation=self.label_rotation)
 #         print('Done on {}'.format(ax))
         return plot_data
         
