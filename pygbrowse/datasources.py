@@ -340,6 +340,7 @@ class _MatrixData:
     def query(self, chrom, start, end):
         return self._query(query_chrom=chrom, query_start=start, query_end=end)
 
+        
 class HicDataDir(_MatrixData):
     def __init__(self, 
                  fname_template='/home/dskola/projects/coupled_peaks/hic/c57_hic_corrs_{}.tsv',
@@ -351,17 +352,26 @@ class HicDataDir(_MatrixData):
         this_chrom_fname = self.fname_template.format(query_chrom)
         this_chrom_data = pandas.read_csv(this_chrom_fname, sep='\t', index_col=0)
         
-        rounded_start = toolbox.roundto(query_start, binsize)
-        rounded_end = toolbox.roundto(query_end, binsize)
+        rounded_start = utilities.roundto(query_start, binsize)
+        rounded_end = utilities.roundto(query_end, binsize)
 
         return this_chrom_data.loc[rounded_start:rounded_end, rounded_start:rounded_end]
     
+    
 class HicDataDict(_MatrixData):
-    def __init__(self, data_dict):
+    def __init__(self, data_dict, bin_size):
+        # self.data_dict = {chrom:self.rename_hic_df(data_dict[chrom]) for chrom in data_dict}
         self.data_dict = data_dict
+        self.bin_size = bin_size
         
     def _query(self, query_chrom, query_start, query_end):
-        rounded_start = toolbox.roundto(query_start, binsize)
-        rounded_end = toolbox.roundto(query_end, binsize)
+        rounded_start = utilities.roundto(query_start, self.bin_size)
+        rounded_end = utilities.roundto(query_end, self.bin_size)
         
-        return self.data_dict[query_chrom].loc[rounded_start:rounded_end, rounded_start:rounded_end]        
+        return self.data_dict[query_chrom].loc[rounded_start:rounded_end, rounded_start:rounded_end]     
+
+    @staticmethod
+    def rename_hic_df(hic_df):
+        hic_df.index = [int(name.split('-')[1]) for name in hic_df.index]
+        hic_df.columns = [int(name.split('-')[1]) for name in hic_df.columns] 
+        return hic_df

@@ -291,3 +291,20 @@ def adjust_limits(ax, new_position, axis='y', padding_fraction=0.1):
 #     print(new_plot_min, new_plot_max)
 
     limit_setter((new_plot_min, new_plot_max))    
+    
+    
+def diag_indices(n, k=0):
+    """
+    Return the indices corresponding to the kth diagonal of an n X n array
+    in the form of a tuple of (x coords, y coords). 
+    
+    Created since numpy does not provide this functionality.
+    """
+    if k <= 0:
+        x_coords = numpy.arange(-k, n)
+        y_coords = numpy.arange(0, n + k)
+    else:
+        x_coords = numpy.arange(0, n - k)
+        y_coords = numpy.arange(k, n)
+
+    return (x_coords, y_coords)    

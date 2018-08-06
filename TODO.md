@@ -15,7 +15,8 @@
 4. General
     2. Shrink logo.
     3. Look into eliminating requirement for seaborn (at this point I think we only use the styles).
-	4. Add plotter for diagonal Hi-C matrices
+	4. Make HiC bins diagonal instead of square. 
 	5. Add parameter for subplots to share yaxis limits.
+	6. Add installation instructions to GitHub README
 	
     

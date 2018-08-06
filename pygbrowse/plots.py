@@ -5,11 +5,13 @@ import numpy
 import pandas
 import scipy
 import scipy.signal
+from scipy import ndimage
 import seaborn
 
 from . import utilities
 
 DEFAULT_ARC_POINTS = 200
+DEFAULT_YLABEL_PAD = 50
 CHROMOSOME_DIALECT = 'ucsc'
 
 
@@ -359,10 +361,12 @@ class WigPlot(_BrowserSubPlot):
         self.center = center_vector
         self.scale_vector_to_plot = scale_vector_to_plot
         self.label = label
+        
         if smoothing_bandwidth:
             self.convolution_kernel = utilities.gaussian_kernel(smoothing_bandwidth)
         else:
             self.convolution_kernel = None
+            
         self.label_rotation = label_rotation  
           
 
@@ -399,7 +403,7 @@ class WigPlot(_BrowserSubPlot):
 
         # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:
-            ax.set_ylabel(self.label, rotation=self.label_rotation)
+            ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
 
 
 class GeneModelPlot(_BrowserSubPlot):
@@ -767,20 +771,21 @@ class GenomeBrowser:
         return fig
 
 class HicPlotter:
-    def __init__(self, data, binsize, vertical_scale=1, cmap='YlOrRd', transform=lambda x: x**2, max_masked_diag=2):
+    def __init__(self, data, label='', vertical_scale=1, cmap='YlOrRd', label_rotation=0, transform=lambda x: x**2, max_masked_diag=2):
         self.data = data
-        self.binsize = binsize
         self.cmap = cmap
-        self.transform = transform
+        self.transform = transform # ToDo: Move the transform to the Data provider
         self.max_masked_diag = max_masked_diag
+        self.label = label
+        self.label_rotation = label_rotation
         self.vertical_scale = vertical_scale
         
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
 #         print(ax)
 #         print(ws, we)
 
-        visible_start_bin = toolbox.roundto(ws, binsize)
-        visible_end_bin = toolbox.roundto(we, binsize)
+        visible_start_bin = utilities.roundto(ws, self.data.bin_size)
+        visible_end_bin = utilities.roundto(we, self.data.bin_size)
 
 #         print(visible_start_bin, visible_end_bin)
 
@@ -795,7 +800,7 @@ class HicPlotter:
         plot_data = self.data.query(chrom, data_start_bin, data_end_bin)
         
         for diag in range(self.max_masked_diag):
-            plot_data.values[my_diag_indices(plot_data.shape[0], diag)] = 0
+            plot_data.values[utilities.diag_indices(plot_data.shape[0], diag)] = 0
 
         plot_data = pandas.DataFrame(ndimage.rotate(plot_data, 45, reshape=False),
                                      index=plot_data.index, columns=plot_data.columns)
@@ -822,6 +827,16 @@ class HicPlotter:
         ax.set_ylim(0, plot_data.shape[1])
         ax.imshow(plot_data, cmap=self.cmap, aspect='auto', extent=(ws, we, 0, plot_data.shape[1]))
         ax.set_xticks([])
+        ax.set_ylabel(self.label, label_rotation=self.label_rotation)
 #         print('Done on {}'.format(ax))
         return plot_data
         
+        
+def match_ylims(fig, ax_nums):
+    """
+    Will make the upper ylim of each of the numbered axes of :param fig: listed in
+    :param ax_nums: equal to the maximum found in any of the numbered axes.
+    """
+    max_extent = max([fig.get_axes()[ax_num].get_ylim()[1] for ax_num in ax_nums])
+    for ax_num in ax_nums:
+        fig.get_axes()[ax_num].set_ylim((0, max_extent))        
