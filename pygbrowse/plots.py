@@ -304,12 +304,6 @@ class BedPlot(_BrowserSubPlot):
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
         vert_span = ylim[1] - ylim[0]
-
-        # ax.set_yticks(list(ax.get_yticks()) + [self.baseline])
-        # print(list(ax.get_yticklabels()))
-        # print(self.label,list(ax.get_yticklabels()) + [self.label]) 
-        # ax.set_yticklabels(list(ax.get_yticklabels()) + [self.label])
-        # print(list(ax.get_yticklabels()))
         
         utilities.add_label(ax=ax, tick=self.baseline, tick_label=self.label, axis='y')
         
@@ -321,6 +315,7 @@ class BedPlot(_BrowserSubPlot):
         for interval_name in visible_intervals.index:
             start_loc = visible_intervals.loc[interval_name, 'chromStart']
             end_loc = visible_intervals.loc[interval_name, 'chromEnd']
+            
             if self.color_by:
                 interval_color = self.color_mapper.to_rgba(self.interval_data.loc[interval_name][self.color_by])
             else:
@@ -340,10 +335,8 @@ class BedPlot(_BrowserSubPlot):
                                 axis='y', padding_fraction=self.pad_fraction)
         utilities.adjust_limits(ax=ax, new_position=self.baseline - self.patch_height / 2, 
                                 axis='y', padding_fraction=self.pad_fraction)
-
-        # ax.set_ylim(0, 1)
-        #ax.set_ylabel(self.label)
-
+                                
+        # print(self.label, ax.get_yticks(), ax.get_yticklabels(), ax.get_ylim())
 
 
 class WigPlot(_BrowserSubPlot):
@@ -393,7 +386,7 @@ class WigPlot(_BrowserSubPlot):
 
         this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
         this_plot_vector.name = self.label
-        
+               
         if self.style == 'solid':
             ax.fill_between(x=this_plot_vector.index, y1=this_plot_vector, color=self.color, label=self.label)
         else:
@@ -770,7 +763,7 @@ class GenomeBrowser:
 
         return fig
 
-class HicPlotter:
+class HicPlot:
     def __init__(self, data, label='', vertical_scale=1, cmap='YlOrRd', label_rotation=0, transform=lambda x: x**2, max_masked_diag=2):
         self.data = data
         self.cmap = cmap
@@ -781,22 +774,13 @@ class HicPlotter:
         self.vertical_scale = vertical_scale
         
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
-#         print(ax)
-#         print(ws, we)
-
         visible_start_bin = utilities.roundto(ws, self.data.bin_size)
         visible_end_bin = utilities.roundto(we, self.data.bin_size)
-
-#         print(visible_start_bin, visible_end_bin)
-
         visible_span = visible_end_bin - visible_start_bin
-
-#         print(visible_span)
 
         data_start_bin = visible_start_bin - visible_span // 2
         data_end_bin = visible_end_bin + visible_span // 2
 
-#         print(data_start_bin, data_end_bin)
         plot_data = self.data.query(chrom, data_start_bin, data_end_bin)
         
         for diag in range(self.max_masked_diag):
@@ -812,22 +796,15 @@ class HicPlotter:
         # Only show upper diagonal
         plot_data = plot_data.iloc[:-plot_data.shape[0] // 2,:]
         
-#         return plot_data
-#         plot_data = plot_data[plot_data.shape[0] // 4:-plot_data.shape[0] // 2, plot_data.shape[1] // 4: -plot_data.shape[1] // 4]
-#         plot_data = plot_data[plot_data.shape[0] * (1-self.vertical_scale):]
-#         print(plot_data.shape)
     
         plot_data = self.transform(plot_data)
         
         # Re-index plot_data to allow it to play nicely with ax limits
-        
-#         plot_data = pandas.DataFrame(plot_data, columns=numpy.linspace(ws, we, num=plot_data.shape[1]))
-#         print(plot_data)
-#         print('Calling imshow on {}'.format(ax))
+
         ax.set_ylim(0, plot_data.shape[1])
         ax.imshow(plot_data, cmap=self.cmap, aspect='auto', extent=(ws, we, 0, plot_data.shape[1]))
         ax.set_xticks([])
-        ax.set_ylabel(self.label, rotation=self.label_rotation)
+        ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
 #         print('Done on {}'.format(ax))
         return plot_data
         

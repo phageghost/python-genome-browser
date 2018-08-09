@@ -15,14 +15,11 @@ DEFAULT_GENE_TYPES = (
 'processed_transcript')
 DEFAULT_TRANSCRIPT_TYPES = ('mRNA', 'transcript', 'lincRNA', 'lnc_RNA', 'miRNA', 'ncRNA', 'snRNA', 'snoRNA')
 DEFAULT_COMPONENT_TYPES = ('CDS', 'three_prime_UTR', 'five_prime_UTR')
-
-
 # DEFAULT_MAXIMUM_TRANSCRIPT_SUPPORT = 5
 
 # ToDo: For each class, allow option of loading into memory or leaving on disk (where applicable)
-# ToDo: Add a transform function and smoothing.
 # ToDo: Add indexing of on-disk csv-like files
-
+# ToDo: Refactor vector data sources to transparently interpolate sparse vectors. Probably will have to drop dict-of-series interface.
 
 class _ChromWrapper:
     def __init__(self, chrom, parent_data_source):
@@ -60,16 +57,33 @@ class _VectorDataSource:
         print('Stub method -- must be overridden by inheritors')
 
     def query(self, query_chrom, query_start, query_end):
-        result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
+        query_result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
+        
         if self.convolution_kernel is not None:
-            result = pandas.Series(convolve(result, self.convolution_kernel, mode='same'), index=result.index)
+            query_result = pandas.Series(convolve(query_result, self.convolution_kernel, mode='same'), index=query_result.index)
         if self.transform:
-            result = self.transform(result)
-        return result
+            query_result = self.transform(query_result)
+
+        return query_result
 
     def __getitem__(self, key):
         return _DataVector(chrom=key, parent_data_source=self)
 
+
+class SparseVectors(_VectorDataSource):
+    def __init__(self, series_dict, transform=None, convolution_kernel=None):     
+        self.data = series_dict
+        self.transform = transform
+        self.convolution_kernel = convolution_kernel
+       
+    
+    def _query(self, query_chrom, query_start, query_end):
+        this_chrom_vector = self.data[query_chrom]
+        start_ipos = numpy.searchsorted(this_chrom_vector.keys(), query_start) - 1
+        end_ipos = numpy.searchsorted(this_chrom_vector.keys(), query_end) + 1
+        
+        return this_chrom_vector.iloc[start_ipos:end_ipos]
+        
 
 class TagDirectory(_VectorDataSource):
     tag_strand_translator = {0: '+', 1: '-'}
@@ -135,8 +149,9 @@ class TagDirectory(_VectorDataSource):
 
 
 class IntervalData:
-    HOMER_PEAKFILE_HEADER_ROW = 39
-    HOMER_PEAKFILE_COLUMN_RENAMER = {'chr': 'chrom', 'start': 'chromStart', 'end': 'chromEnd'}
+    # HOMER_PEAKFILE_HEADER_ROW = 39
+    # HOMER_PEAKFILE_COLUMN_RENAMER = {'chr': 'chrom', 'start': 'chromStart', 'end': 'chromEnd'}
+    HOMER_PEAKFILE_NAMES = ('chrom', 'chromStart', 'chromEnd', 'strand', 'normed_tag_count')
     HOMER_ANNOTATEDPEAKS_COLUMN_RENAMER = {'Chr': 'chrom', 'Start': 'chromStart', 'End': 'chromEnd', 'Strand': 'strand'}
 
     def __init__(self, interval_data, format='bed'):
@@ -191,15 +206,15 @@ class IntervalData:
             #     elif extension.lower() == 'homer':
             #         # ToDo: Add more sophisticated methods of detecting formats since, e.g. .txt can refer to many.
             #         format = 'homer'
-            # ToDo: allow filename parameters to be file handles -- autodetect
 
             if format == 'bed':
                 self.data = pandas.read_csv(interval_data, sep='\t', index_col=3, comment='#', header=None,
                                             names=['chrom', 'chromStart', 'chromEnd', 'score', 'strand'])
             elif format == 'homer':
-                self.data = pandas.read_csv(interval_data, sep='\t', index_col=0, header=self.HOMER_PEAKFILE_HEADER_ROW)
-                self.data.index.name = self.data.index.name[1:]
-                self.data = self.data.rename(columns=self.HOMER_PEAKFILE_COLUMN_RENAMER)
+                self.data = pandas.read_csv(interval_data, sep='\t', index_col=0, comment='#', header=None)
+                self.data.columns = list(self.HOMER_PEAKFILE_NAMES) + list(self.data.columns)[len(self.HOMER_PEAKFILE_NAMES):]
+                self.data.index.name = 'peak_id'
+                # self.data = self.data.rename(columns=self.HOMER_PEAKFILE_COLUMN_RENAMER)
 
             elif format == 'homer_annotated':
                 self.data = pandas.read_csv(interval_data, index_col=0, sep='\t')
@@ -214,6 +229,10 @@ class IntervalData:
 
 class _GeneModels():
     def __init__(self):
+        """
+        Superclass for data sources that describe gene models (gene boundaries, transcript
+        boundaries, exons, introns, UTRs, etc.).        
+        """
         pass
 
     def _query(self, query_chromosome, query_start, query_end):
@@ -267,8 +286,10 @@ class Gff3Annotations(_GeneModels):
                 strand = split_line[6]
 
                 fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
-                # print(line_num, line)
+                print(line)
+
                 if feature_type in self.gene_types:
+
                     ensembl_id = fields['ID']
                     gene_name = fields['Name']
                     #                     assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
@@ -288,7 +309,8 @@ class Gff3Annotations(_GeneModels):
 
                 elif feature_type in self.transcript_types:
                     parent = fields['Parent']
-                    # print('\ttranscript parent {}'.format(parent))
+
+                    print('\ttranscript has gene parent {}. {}'.format(parent, parent in genes))
                     # try:
                     #     transcript_support_level = int(fields['transcript_support_level'].split(' ')[0])
                     # except ValueError:
@@ -311,7 +333,7 @@ class Gff3Annotations(_GeneModels):
 
                 elif feature_type in self.component_types:
                     parent = fields['Parent']
-                    # print('\thas parent {}. {}'.format(parent, parent in transcripts))
+                    print('\tcomponent has transcript parent {}. {}'.format(parent, parent in transcripts))
                     if parent in transcripts:
                         if 'exon_id' in fields:
                             ensembl_id = fields['exon_id']
