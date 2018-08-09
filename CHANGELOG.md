@@ -10,4 +10,8 @@
 	* Added automatic y-axis scaling for BedPlots
 	* Improved ytick labeling for BedPlots.
 	* Made WigPlots solid-filled by default.
+	
+### 0.3.1	August 09, 2018
+	* Fixed bug where initial exons and five-prime UTRs would be missed on + strand genes.
+	* Minor bugfixes
 

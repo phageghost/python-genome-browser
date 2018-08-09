@@ -242,6 +242,8 @@ class _GeneModels():
         return self._query(query_chromosome=chromosome, query_start=start, query_end=end)
 
 
+from pygbrowse.datasources import _GeneModels
+
 class Gff3Annotations(_GeneModels):
     def __init__(self,
                  gff3_filename,
@@ -286,10 +288,9 @@ class Gff3Annotations(_GeneModels):
                 strand = split_line[6]
 
                 fields = dict(field_value_pair.split('=') for field_value_pair in split_line[8].split(';'))
-                print(line)
+#                 print(line)
 
                 if feature_type in self.gene_types:
-
                     ensembl_id = fields['ID']
                     gene_name = fields['Name']
                     #                     assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
@@ -308,48 +309,55 @@ class Gff3Annotations(_GeneModels):
                     # print('\t added gene {}'.format(ensembl_id))
 
                 elif feature_type in self.transcript_types:
-                    parent = fields['Parent']
-
-                    print('\ttranscript has gene parent {}. {}'.format(parent, parent in genes))
+#                     print('\ttranscript has gene parent {}. {}'.format(parent, parent in genes))
                     # try:
                     #     transcript_support_level = int(fields['transcript_support_level'].split(' ')[0])
                     # except ValueError:
                     #     passed_support_filter = False
                     # else:
                     #     passed_support_filter = transcript_support_level < self.maximum_transcript_support
+                    ensembl_id = fields['ID']
+                    transcripts[ensembl_id] = {'contig': contig,
+                                               'start': start - 1,  # convert 1-based to 0-based
+                                               'end': end,
+                                               'strand': strand,
+                                               'components': []}
+                    transcripts[ensembl_id].update(fields)
 
-                    if parent in genes:
-                        ensembl_id = fields['ID']
-                        transcripts[ensembl_id] = {'contig': contig,
-                                                   'start': start - 1,  # convert 1-based to 0-based
-                                                   'end': end,
-                                                   'strand': strand,
-                                                   'components': []}
-                        transcripts[ensembl_id].update(fields)
-
-                        genes[parent]['transcripts'].append(ensembl_id)
-                        # print('\t added transcript {} with parent {}'.format(ensembl_id, parent))
+                    # print('\t added transcript {} with parent {}'.format(ensembl_id, parent))
 
 
                 elif feature_type in self.component_types:
-                    parent = fields['Parent']
-                    print('\tcomponent has transcript parent {}. {}'.format(parent, parent in transcripts))
-                    if parent in transcripts:
-                        if 'exon_id' in fields:
-                            ensembl_id = fields['exon_id']
-                        else:
-                            ensembl_id = str(component_num)
-                            component_num += 1
+#                     print('\tcomponent has transcript parent {}. {}'.format(parent, parent in transcripts))
+                    if 'exon_id' in fields:
+                        ensembl_id = fields['exon_id']
+                    else:
+                        ensembl_id = str(component_num)
+                        component_num += 1
 
-                        components[ensembl_id] = {'contig': contig,
-                                                  'start': start - 1,  # convert 1-based to 0-based
-                                                  'end': end,
-                                                  'strand': strand,
-                                                  'type': feature_type}
-                        components[ensembl_id].update(fields)
-                        transcripts[parent]['components'].append(ensembl_id)
+                    components[ensembl_id] = {'contig': contig,
+                                              'start': start - 1,  # convert 1-based to 0-based
+                                              'end': end,
+                                              'strand': strand,
+                                              'type': feature_type}
+                    components[ensembl_id].update(fields)
+                    
+        for transcript_id, transcript_data in transcripts.items():
+            parent = transcript_data['Parent']
+            if parent in genes:
+                genes[parent]['transcripts'].append(transcript_id)
+            else:
+                print('orphan transcript {} with missing parent {}!'.format(transcript_id, parent))
+                
+        for component_id, component_data in components.items():
+            parent = component_data['Parent']
+            if parent in transcripts:
+                transcripts[parent]['components'].append(component_id)
+            else:
+                print('orphan component {} with missing parent {}!'.format(component_id, parent))
 
         return genes, transcripts, components, gene_names_to_ensembl_ids
+
 
         
 class _MatrixData:
