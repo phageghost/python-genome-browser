@@ -15,3 +15,5 @@
 	* Fixed bug where initial exons and five-prime UTRs would be missed on + strand genes.
 	* Minor bugfixes
 
+### X.X.X
+	* Implemented alpha transparency for WigPlots

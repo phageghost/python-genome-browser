@@ -388,9 +388,9 @@ class WigPlot(_BrowserSubPlot):
         this_plot_vector.name = self.label
                
         if self.style == 'solid':
-            ax.fill_between(x=this_plot_vector.index, y1=this_plot_vector, color=self.color, label=self.label)
+            ax.fill_between(x=this_plot_vector.index, y1=this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
         else:
-            ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, label=self.label)
+            ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
         
         ax.autoscale(enable=True, axis='y')
 
