@@ -312,12 +312,14 @@ class BedPlot(_BrowserSubPlot):
                 ((ws <= self.interval_data.chromStart) & (self.interval_data.chromStart <= we)) | (
                 (ws <= self.interval_data.chromEnd) & (self.interval_data.chromEnd <= we)))]
 
-        for interval_name in visible_intervals.index:
-            start_loc = visible_intervals.loc[interval_name, 'chromStart']
-            end_loc = visible_intervals.loc[interval_name, 'chromEnd']
+        for interval_idx in range(visible_intervals.shape[0]):
+            this_interval = visible_intervals.iloc[interval_idx]
+            start_loc = this_interval['chromStart']
+            end_loc = this_interval['chromEnd']
+            assert end_loc > start_loc, 'interval end point must be greater than interval start!'
             
             if self.color_by:
-                interval_color = self.color_mapper.to_rgba(self.interval_data.loc[interval_name][self.color_by])
+                interval_color = self.color_mapper.to_rgba(this_interval[self.color_by])
             else:
                 interval_color = self.color
 
@@ -329,7 +331,7 @@ class BedPlot(_BrowserSubPlot):
             ax.add_patch(rec)
             if self.display_value:
                 ax.text(x=(start_loc + end_loc) / 2, y=self.baseline,
-                        s='{:>0.2}'.format(self.interval_data.loc[interval_name, self.display_value]), ha='center')
+                        s='{:>0.2}'.format(this_interval[self.display_value]), ha='center')
                         
         utilities.adjust_limits(ax=ax, new_position=self.baseline + self.patch_height / 2, 
                                 axis='y', padding_fraction=self.pad_fraction)
