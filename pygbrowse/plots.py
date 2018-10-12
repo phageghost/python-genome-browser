@@ -412,7 +412,8 @@ class GeneModelPlot(_BrowserSubPlot):
                  chevron_spacing=0.10,
                  truncation_size=0.10,
                  utr_endcap_width=0.04,
-                 gene_name_fontsize=8):
+                 gene_name_fontsize=8,
+                 genes_include=[]):
 
         super(GeneModelPlot, self).__init__()
 
@@ -427,6 +428,7 @@ class GeneModelPlot(_BrowserSubPlot):
         self.truncation_size = truncation_size  # in inches
         self.utr_endcap_width = utr_endcap_width  # in inches
         self.gene_name_fontsize = gene_name_fontsize
+        self.genes_include = genes_include # the list of genes to be included in plot
 
     @staticmethod
     def _arrange_genes(gene_data_list):
@@ -480,6 +482,8 @@ class GeneModelPlot(_BrowserSubPlot):
             for gene_id in level_genes:
                 gene_data = overlapping_genes[gene_id]
                 #                 print(gene_id, gene_data['Name'])
+                if len(self.genes_include) > 0 and (not any(gene_data['Name'] in s for s in self.genes_include)):
+                    continue
 
                 left_truncated = gene_data['start'] < ws
                 right_truncated = gene_data['end'] > we
