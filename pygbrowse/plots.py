@@ -364,7 +364,6 @@ class WigPlot(_BrowserSubPlot):
             
         self.label_rotation = label_rotation  
           
-
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         ylim = ax.get_ylim()
 
@@ -395,6 +394,62 @@ class WigPlot(_BrowserSubPlot):
             ax.plot(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
         
         ax.autoscale(enable=True, axis='y')
+
+        # ToDo: Allow labeling either by ylabel or by ax.legend
+        if self.label:
+            ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
+
+
+class ScatterPlot(_BrowserSubPlot):
+    # ToDo: Add support for stranded data
+    def __init__(self, genomic_vector_data, label=None, color=None, solid=True, alpha=1.0,  
+                center_vector=False, scale_vector_to_plot=False, vertical_padding=0.05,
+                 force_zero=False,
+                label_rotation=0):
+        
+        super(ScatterPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
+        self.data = genomic_vector_data
+        self.color = color
+        self.solid = solid
+        self.alpha = alpha
+        self.center = center_vector
+        self.scale_vector_to_plot = scale_vector_to_plot
+        self.vertical_padding = vertical_padding
+        self.force_zero = force_zero
+        self.label = label
+        
+        self.label_rotation = label_rotation  
+          
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        ylim = ax.get_ylim()
+
+        vert_span = (ylim[1] - ylim[0])
+        vert_center = vert_span / 2 + ylim[0]
+
+        this_plot_vector = self.data[chrom].loc[ws:we]
+
+        if self.scale_vector_to_plot:
+            this_plot_vector /= (this_plot_vector.max() - this_plot_vector.min())
+            this_plot_vector *= vert_span
+
+        if self.center:
+            this_plot_vector -= this_plot_vector.mean()
+            this_plot_vector += vert_center
+
+        this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
+        this_plot_vector.name = self.label
+               
+        ax.scatter(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
+        
+        ax.autoscale(enable=True, axis='y')
+        if self.vertical_padding:
+            ylim = ax.get_ylim()
+            pad = (ylim[1] - ylim[0]) * self.vertical_padding
+            print(pad)
+            ax.set_ylim(ylim[0] - pad, ylim[1] + pad)
+
+        if self.force_zero:
+            ax.set_ylim(0, ax.get_ylim()[1])
 
         # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:
