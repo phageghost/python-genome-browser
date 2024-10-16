@@ -12,6 +12,10 @@ from . import romannumerals
 # ToDo: Add option for solid fill of vectors
 
 
+def is_monotonic_increasing(arr):
+    return np.not_equal(np.sign(np.diff(arr)), 1).sum() == 0
+
+
 def roundto(num, nearest):
     """
     Rounds :param:`num` to the nearest increment of :param:`nearest`

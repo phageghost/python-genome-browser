@@ -11,7 +11,7 @@ from .utilities import log_print
 DEFAULT_TAG_COUNT_NORMALIZATION_TARGET = 10000000
 DEFAULT_FEATURE_SOURCES = ('ensembl', 'havana', 'ensembl_havana')
 DEFAULT_GENE_TYPES = (
-'gene', 'RNA', 'mt_gene', 'lincRNA_gene', 'miRNA_gene', 'ncRNA_gene', 'rRNA_gene', 'snRNA_gene', 'snoRNA_gene',
+'gene', 'RNA', 'mt_gene', 'lincRNA_gene', 'miRNA_gene', 'rRNA_gene', 'snRNA_gene', 'snoRNA_gene',
 'processed_transcript')
 DEFAULT_TRANSCRIPT_TYPES = ('mRNA', 'transcript', 'lincRNA', 'lnc_RNA', 'miRNA', 'ncRNA', 'snRNA', 'snoRNA')
 DEFAULT_COMPONENT_TYPES = ('CDS', 'three_prime_UTR', 'five_prime_UTR')
@@ -242,8 +242,6 @@ class _GeneModels():
         return self._query(query_chromosome=chromosome, query_start=start, query_end=end)
 
 
-from pygbrowse.datasources import _GeneModels
-
 class Gff3Annotations(_GeneModels):
     def __init__(self,
                  gff3_filename,
@@ -280,7 +278,7 @@ class Gff3Annotations(_GeneModels):
         for line in query_rows:
             split_line = line.strip('\n').split('\t')
             source, feature_type = split_line[1], split_line[2]
-
+            # print(feature_type)
             if source in self.feature_sources:
                 contig = split_line[0]
                 start = int(split_line[3])
@@ -291,6 +289,7 @@ class Gff3Annotations(_GeneModels):
 #                 print(line)
 
                 if feature_type in self.gene_types:
+                    # print(fields)
                     ensembl_id = fields['ID']
                     gene_name = fields['Name']
                     #                     assert ensembl_id not in genes, 'Duplicate entry for gene {} on line {}'.format(ensembl_id,
@@ -405,3 +404,43 @@ class HicDataDict(_MatrixData):
         hic_df.index = [int(name.split('-')[1]) for name in hic_df.index]
         hic_df.columns = [int(name.split('-')[1]) for name in hic_df.columns] 
         return hic_df
+
+
+class SparseMatrixDataBinned(_MatrixData):
+    def __init__(self, data_dict, bin_size):
+        self.data_dict = data_dict
+        self.bin_size = bin_size
+        
+    def query(self, query_chrom, query_start, query_end):
+        rounded_start = utilities.roundto(query_start, self.bin_size)
+        rounded_end = utilities.roundto(query_end, self.bin_size)
+        num_bins = (rounded_end - rounded_start) // self.bin_size + 1
+
+        # Get the sparse data
+        query_data = self.data_dict[query_chrom].loc[rounded_start:rounded_end+1, rounded_start:rounded_end+1]
+        
+        # Assign bin labels to the sparse data
+        query_bins = [(pos // bin_size) * bin_size for pos in query_data.index]
+        query_data.index = query_bins
+        query_data.columns = query_bins
+        
+        # Take mean within bins
+        query_data = query_data.groupby(by=lambda x:x, sort=False).mean().T.groupby(by=lambda x:x, sort=False).mean().T
+
+        # Create an empty by-bin matrix
+        expanded_df = pd.DataFrame(np.zeros(shape=(num_bins, num_bins)),
+                                   index=np.arange(rounded_start, rounded_end + 1, step=self.bin_size),
+                                   columns=np.arange(rounded_start, rounded_end + 1, step=self.bin_size))
+
+        
+        # Add the bin means to the bin matrix
+        return expanded_df.add(query_data, fill_value=0)
+
+
+class SparseMatrixData(_MatrixData):
+    def __init__(self, data_dict):
+        self.data_dict = data_dict
+        
+    def query(self, query_chrom, query_start, query_end):
+        return self.data_dict[query_chrom].loc[query_start:query_end+1, query_start:query_end+1]
+        

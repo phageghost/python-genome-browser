@@ -1,12 +1,12 @@
 import intervaltree
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy
-import pandas
+import numpy as np
+import pandas as pd
 import scipy
 import scipy.signal
 from scipy import ndimage
-import seaborn
+import seaborn as sns
 
 from . import utilities
 
@@ -22,29 +22,29 @@ def compute_half_arc_points(center, a, b, theta1, theta2, num_points=DEFAULT_ARC
     an ellipse for a single quadrant.
     """
     # ToDo: Add input validation to make sure we stay within a single quadrant.
-    x_coords = numpy.empty(num_points)
-    y_coords = numpy.empty(num_points)
+    x_coords = np.empty(num_points)
+    y_coords = np.empty(num_points)
 
     for i in range(0, num_points):
         theta = (theta2 - theta1) * (i / max(num_points - 1, 1)) + theta1
-        fi = numpy.pi / 2 - numpy.arctan(numpy.tan(theta))
-        x = center[0] + a * numpy.cos(fi)
-        y = center[1] + b * numpy.sin(fi)
+        fi = np.pi / 2 - np.arctan(np.tan(theta))
+        x = center[0] + a * np.cos(fi)
+        y = center[1] + b * np.sin(fi)
         x_coords[i] = x
         y_coords[i] = y
 
     return x_coords, y_coords
 
 
-def draw_arc(ax, center, height, width, theta1=0, theta2=numpy.pi, color='k', direction='down',
+def draw_arc(ax, center, height, width, theta1=0, theta2=np.pi, color='k', direction='down',
              num_points=DEFAULT_ARC_POINTS):
     """
     Since Matplotlib's Arc Patches are broken at the moment, we draw arcs using the ax.plot() method
     instead.
     """
-    LEFT_END_THETA = numpy.pi / 2
-    RIGHT_END_THETA = numpy.pi * 1.5
-    MIDPOINT_THETA = numpy.pi
+    LEFT_END_THETA = np.pi / 2
+    RIGHT_END_THETA = np.pi * 1.5
+    MIDPOINT_THETA = np.pi
 
     vertical_baseline = center[1]
 
@@ -60,8 +60,8 @@ def draw_arc(ax, center, height, width, theta1=0, theta2=numpy.pi, color='k', di
     left_points = int(num_points * left_angle_span / total_angle_span)
     right_points = num_points - left_points
 
-    x_coords = numpy.empty(num_points)
-    y_coords = numpy.empty(num_points)
+    x_coords = np.empty(num_points)
+    y_coords = np.empty(num_points)
 
     if left_points:
         # plot upper left quadrant
@@ -97,13 +97,13 @@ def draw_visible_arc(ax, center, height, width, ws, we,
     Does not truncate based on y coordinates
     """
     # ToDo: Subtract 1 pi from all coordinates
-    LEFT_END_THETA = numpy.pi / 2 + 0.00001
-    RIGHT_END_THETA = numpy.pi * 1.5 - 0.00001
+    LEFT_END_THETA = np.pi / 2 + 0.00001
+    RIGHT_END_THETA = np.pi * 1.5 - 0.00001
 
     def infer_theta_cutoff(x, arc_center, arc_width):
         a = arc_width / 2
-        fi = numpy.arccos((x - arc_center[0]) / a)
-        theta = numpy.arctan(1 / numpy.tan(fi)) + numpy.pi
+        fi = np.arccos((x - arc_center[0]) / a)
+        theta = np.arctan(1 / np.tan(fi)) + np.pi
         return theta
 
     if ws > center[0] - width / 2:
@@ -154,25 +154,10 @@ def draw_arc_interaction(ax,
                      num_points=num_points)
 
 
+# ToDo: Make abstract base class
 class _BrowserSubPlot:
     def __init__(self):
-        # self.chrom = None
-        # self.ws = None
-        # self.we = None
-        # self.fig_width = None
-        # self.row_height = None
         pass
-
-    # def set_globals(self, chrom, ws, we, fig_width=64, row_height=4):
-    #     self.chrom = chrom
-    #     self.ws = ws
-    #     self.we = we
-    #     self.fig_width = fig_width
-    #     self.row_height = row_height
-
-    # @property
-    # def aspect_ratio(self):
-    #     return self.fig_width / self.row_height
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         print('Stub method -- must be overridden by inheritors')
@@ -236,11 +221,11 @@ class InteractionPlot(_BrowserSubPlot):
             ax.set_ylabel(self.label)
 
         if self.show_bin_centers:
-            leftmost_tick = numpy.ceil((ws - self.bin_size / 2) / self.bin_size) * self.bin_size + self.bin_size / 2
-            rightmost_tick = numpy.floor(
+            leftmost_tick = np.ceil((ws - self.bin_size / 2) / self.bin_size) * self.bin_size + self.bin_size / 2
+            rightmost_tick = np.floor(
                 (we - self.bin_size / 2) / self.bin_size + 1) * self.bin_size + self.bin_size / 2
 
-            ax.set_xticks(numpy.arange(leftmost_tick, rightmost_tick, self.bin_size))
+            ax.set_xticks(np.arange(leftmost_tick, rightmost_tick, self.bin_size))
             ax.set_xticklabels([])
 
             if self.direction == 'down':
@@ -281,7 +266,7 @@ class BedPlot(_BrowserSubPlot):
         if self.color_by:
             assert self.color_by in self.interval_data.columns, 'Color-by column {} is not in the interval data!'.format(
                 self.color_by)
-            extent = numpy.abs(self.interval_data[self.color_by]).max()
+            extent = np.abs(self.interval_data[self.color_by]).max()
 
             self.color_mapper = matplotlib.cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=-extent,
                                                                                               vmax=extent),
@@ -373,7 +358,7 @@ class WigPlot(_BrowserSubPlot):
         this_plot_vector = self.data[chrom].loc[ws:we]
 
         if self.convolution_kernel is not None:
-            this_plot_vector = pandas.Series(
+            this_plot_vector = pd.Series(
                 scipy.signal.convolve(this_plot_vector, self.convolution_kernel, mode='same'),
                 index=this_plot_vector.index)
 
@@ -402,20 +387,22 @@ class WigPlot(_BrowserSubPlot):
 
 class ScatterPlot(_BrowserSubPlot):
     # ToDo: Add support for stranded data
-    def __init__(self, genomic_vector_data, label=None, color=None, solid=True, alpha=1.0,  
+    def __init__(self, genomic_vector_data, label=None, color=None, marker='o', alpha=1.0,  
                 center_vector=False, scale_vector_to_plot=False, vertical_padding=0.05,
-                 force_zero=False,
+                 force_zero=False, force_symmetry=False, plot_zero=False,
                 label_rotation=0):
         
         super(ScatterPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data = genomic_vector_data
         self.color = color
-        self.solid = solid
+        self.marker = marker
         self.alpha = alpha
         self.center = center_vector
         self.scale_vector_to_plot = scale_vector_to_plot
         self.vertical_padding = vertical_padding
         self.force_zero = force_zero
+        self.plot_zero = plot_zero
+        self.force_symmetry = force_symmetry
         self.label = label
         
         self.label_rotation = label_rotation  
@@ -426,7 +413,7 @@ class ScatterPlot(_BrowserSubPlot):
         vert_span = (ylim[1] - ylim[0])
         vert_center = vert_span / 2 + ylim[0]
 
-        this_plot_vector = self.data[chrom].loc[ws:we]
+        this_plot_vector = self.data.data[chrom].loc[ws:we]
 
         if self.scale_vector_to_plot:
             this_plot_vector /= (this_plot_vector.max() - this_plot_vector.min())
@@ -442,14 +429,22 @@ class ScatterPlot(_BrowserSubPlot):
         ax.scatter(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
         
         ax.autoscale(enable=True, axis='y')
+        
+            
+        if self.force_symmetry:
+            ylim = ax.get_ylim()            
+            max_y = np.abs(ylim).max()
+            ax.set_ylim(-max_y, max_y)
+        elif self.force_zero:
+            ax.set_ylim(0, ax.get_ylim()[1])
+            
         if self.vertical_padding:
-            ylim = ax.get_ylim()
+            ylim = ax.get_ylim()            
             pad = (ylim[1] - ylim[0]) * self.vertical_padding
-            print(pad)
             ax.set_ylim(ylim[0] - pad, ylim[1] + pad)
 
-        if self.force_zero:
-            ax.set_ylim(0, ax.get_ylim()[1])
+        if self.plot_zero:
+            ax.plot(ax.get_xlim(), (0,0), color='k', linestyle='--')
 
         # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:
@@ -578,15 +573,15 @@ class GeneModelPlot(_BrowserSubPlot):
                     left_x_point = ws + 1
                     right_x_point = ws + truncation_width_dt + 1
 
-                    x_points = numpy.array([left_x_point, right_x_point, right_x_point])
+                    x_points = np.array([left_x_point, right_x_point, right_x_point])
 
-                    larr1 = matplotlib.patches.Polygon(numpy.vstack([x_points, y_points]).T,
+                    larr1 = matplotlib.patches.Polygon(np.vstack([x_points, y_points]).T,
                                                        edgecolor='k',
                                                        facecolor='w',
                                                        fill=True,
                                                        transform=ax.transData,
                                                        zorder=3)
-                    larr2 = matplotlib.patches.Polygon(numpy.vstack([x_points + truncation_width_dt, y_points]).T,
+                    larr2 = matplotlib.patches.Polygon(np.vstack([x_points + truncation_width_dt, y_points]).T,
                                                        edgecolor='k',
                                                        facecolor='w',
                                                        fill=True,
@@ -601,15 +596,15 @@ class GeneModelPlot(_BrowserSubPlot):
                     left_x_point = we - truncation_width_dt - 1
                     right_x_point = we - 1
 
-                    x_points = numpy.array([right_x_point, left_x_point, left_x_point])
+                    x_points = np.array([right_x_point, left_x_point, left_x_point])
 
-                    rarr1 = matplotlib.patches.Polygon(xy=numpy.vstack([x_points, y_points]).T,
+                    rarr1 = matplotlib.patches.Polygon(xy=np.vstack([x_points, y_points]).T,
                                                        edgecolor='k',
                                                        facecolor='w',
                                                        fill=True,
                                                        transform=ax.transData,
                                                        zorder=3)
-                    rarr2 = matplotlib.patches.Polygon(numpy.vstack([x_points - truncation_width_dt, y_points]).T,
+                    rarr2 = matplotlib.patches.Polygon(np.vstack([x_points - truncation_width_dt, y_points]).T,
                                                        edgecolor='k',
                                                        facecolor='w',
                                                        fill=True,
@@ -716,7 +711,7 @@ def compute_ax_row_positions(row_heights, ax_spacing=0.1):
     """
     bottoms = []
     heights = []
-    total_canvas_height = numpy.sum(row_heights)
+    total_canvas_height = np.sum(row_heights)
     fig_height = total_canvas_height * (1 + ax_spacing * len(row_heights))
     cur_vertical_pos = 1
     for row_idx in range(len(row_heights)):
@@ -745,7 +740,7 @@ class GenomeBrowser:
                   row_heights=1,
                   ax_spacing=0.05,
                   num_xticks=10,
-                  seaborn_style=seaborn.axes_style(style='ticks',
+                  sns_style=sns.axes_style(style='ticks',
                                                    rc={'axes.edgecolor': 'w', 'axes.facecolor': '#EAEAF2'})):
         """
         Generate, display and return a matplotlib.Figure object comprising one or more Axes representing the genomic
@@ -766,7 +761,7 @@ class GenomeBrowser:
         :param row_heights:
         :param ax_spacing:
         :param num_xticks:
-        :param seaborn_style:
+        :param sns_style:
         :return:
         """
         # ToDo: Add gene (or other feature) lookup instead of specifying coordinates.
@@ -785,22 +780,22 @@ class GenomeBrowser:
 
         span = end - start
         xtick_increment = span / num_xticks
-        rounding_increment = 5 * 10 ** numpy.round(numpy.log10(xtick_increment) - 1)
+        rounding_increment = 5 * 10 ** np.round(np.log10(xtick_increment) - 1)
         xtick_increment = utilities.roundto(xtick_increment, rounding_increment)
         num_ticks = int(span / xtick_increment) + 1
         round_start = utilities.roundto(start, rounding_increment)
 
-        seaborn.set_style(seaborn_style)
+        sns.set_style(sns_style)
 
         fig = plt.figure(len(self.subplot_objects),
-                         figsize=(fig_width, numpy.sum(row_heights) * (1 + ax_spacing * len(self.subplot_objects))))
+                         figsize=(fig_width, np.sum(row_heights) * (1 + ax_spacing * len(self.subplot_objects))))
         bottoms, heights = compute_ax_row_positions(row_heights=row_heights, ax_spacing=ax_spacing)
 
         for ax_idx in range(len(self.subplot_objects)):
             this_ax = fig.add_axes([0, bottoms[ax_idx], 1, heights[ax_idx]])
 
             if ax_idx == len(self.subplot_objects) - 1:
-                this_ax.set_xticks(numpy.arange(num_ticks) * xtick_increment + round_start)
+                this_ax.set_xticks(np.arange(num_ticks) * xtick_increment + round_start)
                 this_ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
                 this_ax.set_xlabel('{} position'.format(chrom))
                 
@@ -828,7 +823,7 @@ class HicPlot:
     def __init__(self, data, label='', vertical_scale=1, cmap='YlOrRd', label_rotation=0, transform=lambda x: x**2, max_masked_diag=2):
         self.data = data
         self.cmap = cmap
-        self.transform = transform # ToDo: Move the transform to the Data provider
+        self.transform = transform # ToDo: Move the transform to the data source
         self.max_masked_diag = max_masked_diag
         self.label = label
         self.label_rotation = label_rotation
@@ -847,7 +842,7 @@ class HicPlot:
         for diag in range(self.max_masked_diag):
             plot_data.values[utilities.diag_indices(plot_data.shape[0], diag)] = 0
 
-        plot_data = pandas.DataFrame(ndimage.rotate(plot_data, 45, reshape=False),
+        plot_data = pd.DataFrame(ndimage.rotate(plot_data, 45, reshape=False),
                                      index=plot_data.index, columns=plot_data.columns)
 #         print(plot_data.shape)
         
@@ -868,6 +863,87 @@ class HicPlot:
         ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
 #         print('Done on {}'.format(ax))
         return plot_data
+
+
+
+
+class SparseMatrixPlot:
+    def __init__(self, data, label='', 
+                 bin_size=1000,
+                 y_ratio=0.1,
+                cmap='RdBu_r', label_rotation=0, 
+                 transform=None, max_masked_diag=2):
+        self.data = data
+        self.bin_size = bin_size
+        self.y_ratio = y_ratio
+        self.cmap = cmap
+        self.transform = transform
+        self.label = label
+        self.label_rotation = label_rotation
+ 
+    def _prepare_plot_data(self, chrom, ws, we):
+        window_size_x_bp = we - ws
+        window_size_y_bp = int(window_size_x_bp * self.y_ratio)
+
+        # print(f'Window size bp: {window_size_x_bp, window_size_y_bp}')
+        window_size_y_bins = window_size_y_bp // self.bin_size
+        
+        visible_start_bp = utilities.roundto(ws, self.bin_size)
+        visible_end_bp= utilities.roundto(we, self.bin_size)
+        window_size_x_bins = (visible_end_bp - visible_start_bp) // self.bin_size
+
+        # print(f'Window size bins: {window_size_x_bins, window_size_y_bins}')
+        
+        sparse_data = self.data.query(chrom, ws, we)
+        assert np.not_equal(sparse_data.index, sparse_data.columns).sum() == 0, 'Data must have indentical row and column coordinate labels!'
+        assert utilities.is_monotonic_increasing(sparse_data.index), 'Data coordinates must be in ascending order!'
+        coords = sparse_data.index
+        
+        dense_data = np.zeros(shape=(window_size_y_bins, window_size_x_bins))
+        dense_data_counts = np.zeros(shape=(window_size_y_bins, window_size_x_bins))
+
+        for i in range(len(coords)):
+            x = coords[i]
+            for j in range(i, len(coords)):
+                y = coords[j]
+                run = y - x
+                # print(f'x {x}ss, y {y}, run {run}')
+                x_bin = (run // 2 + (x - visible_start_bp)) // self.bin_size 
+                y_bin = run // 2 // self.bin_size
+                # print(f'x_bin {x_bin}, y_bin {y_bin}')
+                if y_bin >= window_size_y_bins or x_bin >= window_size_x_bins:
+                    continue
+                    
+                dense_data[window_size_y_bins - y_bin - 1, x_bin] += sparse_data.iloc[i, j]
+                dense_data_counts[window_size_y_bins - y_bin - 1, x_bin] += 1
+
+        # print(dense_data.shape, dense_data_counts.shape)
+        zero_mask = np.nonzero(dense_data_counts)
+
+        # return dense_data, dense_data_counts, zero_mask
+        # print(zero_mask)
+        dense_data[zero_mask] /= dense_data_counts[zero_mask]
+        
+        if self.transform is not None:
+            dense_data = self.transform(dense_data)
+            
+        bins = np.arange(visible_start_bp, visible_end_bp, step=self.bin_size)
+        dense_data = pd.DataFrame(dense_data, columns=bins)
+
+        return dense_data
+
+
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        plot_data = self._prepare_plot_data(chrom=chrom, ws=ws, we=we)
+        # Re-index plot_data to allow it to play nicely with ax limits
+        ax.set_ylim(0, plot_data.shape[1])
+        # ax.imshow(plot_data, cmap=self.cmap, aspect='auto', extent=(ws, we, 0, plot_data.shape[1]))
+        sns.heatmap(plot_data, ax=ax, cmap=self.cmap, center=0.0, cbar=False)
+        ax.set_xticks([])
+        ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
+        # ax.spines['left'].set_visible(False)
+        ax.set_yticks([])
+
         
         
 def match_ylims(fig, ax_nums):
