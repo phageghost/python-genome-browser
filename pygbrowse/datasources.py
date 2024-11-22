@@ -1,7 +1,7 @@
 import os
 
 import numpy
-import pandas
+import pandas as pd
 import pysam
 from scipy.signal import convolve
 
@@ -60,7 +60,7 @@ class _VectorDataSource:
         query_result = self._query(query_chrom=query_chrom, query_start=query_start, query_end=query_end)
         
         if self.convolution_kernel is not None:
-            query_result = pandas.Series(convolve(query_result, self.convolution_kernel, mode='same'), index=query_result.index)
+            query_result = pd.Series(convolve(query_result, self.convolution_kernel, mode='same'), index=query_result.index)
         if self.transform:
             query_result = self.transform(query_result)
 
@@ -75,7 +75,6 @@ class SparseVectors(_VectorDataSource):
         self.data = series_dict
         self.transform = transform
         self.convolution_kernel = convolution_kernel
-       
     
     def _query(self, query_chrom, query_start, query_end):
         this_chrom_vector = self.data[query_chrom]
@@ -107,7 +106,7 @@ class TagDirectory(_VectorDataSource):
         # ToDo: Add argument validation to all functions and methods with string parameters
         # ToDo: Add verbosity-based logging output
         # ToDo; Compare performance with memory-mapped pandas DataFrames
-        query_result = pandas.Series(numpy.zeros(query_end - query_start), index=numpy.arange(query_start, query_end))
+        query_result = pd.Series(numpy.zeros(query_end - query_start), index=numpy.arange(query_start, query_end))
 
         tag_filename = os.path.join(self.tag_directory_path, '{}.tags.tsv'.format(query_chrom))
         start_offset = utilities.binary_search_tag_file(tag_filename=tag_filename, search_target=query_start + 1)
@@ -208,16 +207,16 @@ class IntervalData:
             #         format = 'homer'
 
             if format == 'bed':
-                self.data = pandas.read_csv(interval_data, sep='\t', index_col=3, comment='#', header=None,
+                self.data = pd.read_csv(interval_data, sep='\t', index_col=3, comment='#', header=None,
                                             names=['chrom', 'chromStart', 'chromEnd', 'score', 'strand'])
             elif format == 'homer':
-                self.data = pandas.read_csv(interval_data, sep='\t', index_col=0, comment='#', header=None)
+                self.data = pd.read_csv(interval_data, sep='\t', index_col=0, comment='#', header=None)
                 self.data.columns = list(self.HOMER_PEAKFILE_NAMES) + list(self.data.columns)[len(self.HOMER_PEAKFILE_NAMES):]
                 self.data.index.name = 'peak_id'
                 # self.data = self.data.rename(columns=self.HOMER_PEAKFILE_COLUMN_RENAMER)
 
             elif format == 'homer_annotated':
-                self.data = pandas.read_csv(interval_data, index_col=0, sep='\t')
+                self.data = pd.read_csv(interval_data, index_col=0, sep='\t')
                 self.data.index.name = self.data.index.name.split(' ')[0]
                 self.data = self.data.rename(columns=self.HOMER_ANNOTATEDPEAKS_COLUMN_RENAMER)
 
@@ -379,7 +378,7 @@ class HicDataDir(_MatrixData):
         
     def _query(self, query_chrom, query_start, query_end):
         this_chrom_fname = self.fname_template.format(query_chrom)
-        this_chrom_data = pandas.read_csv(this_chrom_fname, sep='\t', index_col=0)
+        this_chrom_data = pd.read_csv(this_chrom_fname, sep='\t', index_col=0)
         
         rounded_start = utilities.roundto(query_start, binsize)
         rounded_end = utilities.roundto(query_end, binsize)
@@ -442,5 +441,29 @@ class SparseMatrixData(_MatrixData):
         self.data_dict = data_dict
         
     def query(self, query_chrom, query_start, query_end):
-        return self.data_dict[query_chrom].loc[query_start:query_end+1, query_start:query_end+1]
+       # Get the sparse data
+        selection_vector = np.logical_and(np.greater_equal(self.data_dict[query_chrom].index, query_start), np.less(self.data_dict[query_chrom].index, query_end))       
+        return self.data_dict[query_chrom].loc[selection_vector, selection_vector]
+
+
+class VariantCorrelationData(SparseMatrixData):
+    def __init__(self, variant_corrs_df):
+       self.data_dict = self.split_spdi_matrix(variant_corrs_df)
         
+    @staticmethod
+    def split_spdi_matrix(spdi_matrix: pd.DataFrame):
+        by_chrom_dicts = collections.defaultdict(lambda: collections.defaultdict(lambda: {}))
+        
+        for row_idx in range(spdi_matrix.shape[0]):
+            row_spdi = spdi_matrix.index[row_idx]
+            row_chrom, row_pos, _, _ = row_spdi.split(':')
+            row_pos = int(row_pos)
+            for col_idx in range(row_idx, spdi_matrix.shape[0]):
+                col_spdi = spdi_matrix.index[col_idx]
+                col_chrom, col_pos, _, _ = col_spdi.split(':')
+                col_pos = int(col_pos)
+                if row_chrom == col_chrom: # Exclude trans relations since we can't render them
+                    by_chrom_dicts[row_chrom][row_pos][col_pos] = spdi_matrix.iloc[row_idx, col_idx]
+                    by_chrom_dicts[row_chrom][col_pos][row_pos] = spdi_matrix.iloc[col_idx, row_idx]
+                    
+        return {chrom:pd.DataFrame(chrom_dict).sort_index(axis=0).sort_index(axis=1) for chrom, chrom_dict in by_chrom_dicts.items()}

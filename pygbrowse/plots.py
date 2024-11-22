@@ -945,12 +945,52 @@ class SparseMatrixPlot:
         ax.set_yticks([])
 
         
+class MatrixScatterPlot(_BrowserSubPlot):
+    # ToDo: Add support for stranded data
+    def __init__(self, genomic_matrix_data: _MatrixData, label=None, cmap=plt.cm.RdBu_r,
+                 v_center=0, vmin=-1, vmax=1, marker='o', marker_size=10, alpha=1.0,
+                label_rotation=0):
         
-def match_ylims(fig, ax_nums):
-    """
-    Will make the upper ylim of each of the numbered axes of :param fig: listed in
-    :param ax_nums: equal to the maximum found in any of the numbered axes.
-    """
-    max_extent = max([fig.get_axes()[ax_num].get_ylim()[1] for ax_num in ax_nums])
-    for ax_num in ax_nums:
-        fig.get_axes()[ax_num].set_ylim((0, max_extent))        
+        super(MatrixScatterPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
+        self.data_source = genomic_matrix_data
+        self.label = label
+        self.cmap = cmap
+        self.marker = marker
+        self.marker_size = marker_size
+        self.alpha = alpha
+        self.norm = TwoSlopeNorm(vmin=vmin, vcenter=v_center, vmax=vmax)
+        
+        self.label_rotation = label_rotation  
+          
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        this_chrom_data = self.data_source.query(chrom, ws, we)
+        pos_list = this_chrom_data.index.values
+        size = len(pos_list)
+        
+        x_coords = []
+        y_coords = []
+        values = []
+        
+        for row_idx in range(size):
+            row_pos = pos_list[row_idx] - ws
+            for col_idx in range(row_idx, size):
+                # print(row_idx, col_idx)
+                col_pos = pos_list[col_idx] - ws
+                # print(row_pos, col_pos)
+                val = this_chrom_data.iloc[row_idx, col_idx]
+                x_pos = (row_pos + col_pos) / 2 + offset
+                # y_pos = np.sqrt(row_pos**2 + col_pos**2)
+                y_pos = (col_pos - row_pos) * 2 + offset
+            
+                # print(x_pos, y_pos)    
+                x_coords.append(x_pos)
+                y_coords.append(y_pos)
+                values.append(val)
+        
+        ax.scatter(x_coords, y_coords, c=values, norm=self.norm, cmap=self.cmap, marker=self.marker, s=self.marker_size)
+
+        # ToDo: Allow labeling either by ylabel or by ax.legend
+        if self.label:
+            ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
+
+

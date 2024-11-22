@@ -312,3 +312,13 @@ def diag_indices(n, k=0):
         y_coords = numpy.arange(k, n)
 
     return (x_coords, y_coords)    
+
+
+def match_ylims(fig, ax_nums):
+    """
+    Will make the upper ylim of each of the numbered axes of :param fig: listed in
+    :param ax_nums: equal to the maximum found in any of the numbered axes.
+    """
+    max_extent = max([fig.get_axes()[ax_num].get_ylim()[1] for ax_num in ax_nums])
+    for ax_num in ax_nums:
+        fig.get_axes()[ax_num].set_ylim((0, max_extent))        
