@@ -322,3 +322,12 @@ def match_ylims(fig, ax_nums):
     max_extent = max([fig.get_axes()[ax_num].get_ylim()[1] for ax_num in ax_nums])
     for ax_num in ax_nums:
         fig.get_axes()[ax_num].set_ylim((0, max_extent))        
+
+
+def square_ax(ax):
+    min_x, max_x = ax.get_xlim()
+    min_y, max_y = ax.get_ylim()
+    min_all = min(min_x, min_y)
+    max_all = max(max_x, max_y)
+    ax.set_xlim(min_all, max_all)
+    ax.set_ylim(min_all, max_all)

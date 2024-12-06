@@ -1,6 +1,7 @@
 import intervaltree
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 import pandas as pd
 import scipy
@@ -9,6 +10,7 @@ from scipy import ndimage
 import seaborn as sns
 
 from . import utilities
+from . import datasources
 
 DEFAULT_ARC_POINTS = 200
 DEFAULT_YLABEL_PAD = 50
@@ -163,6 +165,19 @@ class _BrowserSubPlot:
         print('Stub method -- must be overridden by inheritors')
 
 
+class EmptyPlot(_BrowserSubPlot):
+    """
+    Used to create an empty placeholder ax in the figure.
+    """
+    def __init__(self, label='', label_rotation=0):
+        self.label = label
+        self.label_rotation = label_rotation
+
+    def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        if self.label:
+            ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
+        
+
 class InteractionPlot(_BrowserSubPlot):
     def __init__(self, interaction_df,
                  bin_size,
@@ -190,10 +205,9 @@ class InteractionPlot(_BrowserSubPlot):
         self.show_bin_centers = show_bin_centers
         self.thickness_column = thickness_column
 
-
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
         # Filter the interaction DataFrame to interactions with at least one anchor point within the visible window.
-        visible_interactions = self.interaction_df.loc[self.interaction_df['chr1'] == chrom]
+        visible_interactions = self.interaction_df.loc[self.interaction_df['chr1'] == chrom] /
         left_bin_midpoints = (visible_interactions['end1'] + visible_interactions['start1']) / 2
         right_bin_midpoints = (visible_interactions['end2'] + visible_interactions['start2']) / 2
         left_visible = (left_bin_midpoints >= ws) & (left_bin_midpoints <= we)
@@ -218,7 +232,7 @@ class InteractionPlot(_BrowserSubPlot):
         ax.set_ylim(original_ylim)
 
         if self.label:
-            ax.set_ylabel(self.label)
+            ax.set_ylabel(self.label, rotation=self.label_rotation, labelpad=DEFAULT_YLABEL_PAD)
 
         if self.show_bin_centers:
             leftmost_tick = np.ceil((ws - self.bin_size / 2) / self.bin_size) * self.bin_size + self.bin_size / 2
@@ -287,11 +301,13 @@ class BedPlot(_BrowserSubPlot):
             self.patch_kwargs.update(patch_kwargs)
 
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        if chrom not in self.interval_data:
+            return
+        
         ylim = ax.get_ylim()
         vert_span = ylim[1] - ylim[0]
         
         utilities.add_label(ax=ax, tick=self.baseline, tick_label=self.label, axis='y')
-        
         
         visible_intervals = self.interval_data.loc[(self.interval_data.chrom == chrom) & (
                 ((ws <= self.interval_data.chromStart) & (self.interval_data.chromStart <= we)) | (
@@ -350,6 +366,9 @@ class WigPlot(_BrowserSubPlot):
         self.label_rotation = label_rotation  
           
     def plot(self, ax, chrom, ws, we, fig_width, row_height):
+        if chrom not in self.data.data:
+            return
+            
         ylim = ax.get_ylim()
 
         vert_span = (ylim[1] - ylim[0])
@@ -391,8 +410,7 @@ class ScatterPlot(_BrowserSubPlot):
                 center_vector=False, scale_vector_to_plot=False, vertical_padding=0.05,
                  force_zero=False, force_symmetry=False, plot_zero=False,
                 label_rotation=0):
-        
-        super(ScatterPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
+        super(type(self), self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data = genomic_vector_data
         self.color = color
         self.marker = marker
@@ -413,6 +431,8 @@ class ScatterPlot(_BrowserSubPlot):
         vert_span = (ylim[1] - ylim[0])
         vert_center = vert_span / 2 + ylim[0]
 
+        if chrom not in self.data.data:
+            return
         this_plot_vector = self.data.data[chrom].loc[ws:we]
 
         if self.scale_vector_to_plot:
@@ -426,7 +446,7 @@ class ScatterPlot(_BrowserSubPlot):
         this_plot_vector = this_plot_vector.loc[(this_plot_vector.index >= ws) & (this_plot_vector.index < we)]
         this_plot_vector.name = self.label
                
-        ax.scatter(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label)
+        ax.scatter(this_plot_vector.index, this_plot_vector, color=self.color, alpha=self.alpha, label=self.label, marker=self.marker)
         
         ax.autoscale(enable=True, axis='y')
         
@@ -947,11 +967,11 @@ class SparseMatrixPlot:
         
 class MatrixScatterPlot(_BrowserSubPlot):
     # ToDo: Add support for stranded data
-    def __init__(self, genomic_matrix_data: _MatrixData, label=None, cmap=plt.cm.RdBu_r,
-                 v_center=0, vmin=-1, vmax=1, marker='o', marker_size=10, alpha=1.0,
+    def __init__(self, genomic_matrix_data: datasources._MatrixData, label=None, 
+                 cmap=plt.cm.RdBu_r, v_center=0, vmin=-1, vmax=1, marker='D', marker_size=15, alpha=1.0,
                 label_rotation=0):
         
-        super(MatrixScatterPlot, self).__init__()  # placeholder since currently the superclass constructor does nothing.
+        super(type(self), self).__init__()  # placeholder since currently the superclass constructor does nothing.
         self.data_source = genomic_matrix_data
         self.label = label
         self.cmap = cmap
@@ -970,6 +990,11 @@ class MatrixScatterPlot(_BrowserSubPlot):
         x_coords = []
         y_coords = []
         values = []
+
+        height_ratio = row_height / fig_width
+        min_x, max_x = ax.get_xlim()
+        x_span = max_x - min_x
+        max_y = x_span * height_ratio
         
         for row_idx in range(size):
             row_pos = pos_list[row_idx] - ws
@@ -978,16 +1003,17 @@ class MatrixScatterPlot(_BrowserSubPlot):
                 col_pos = pos_list[col_idx] - ws
                 # print(row_pos, col_pos)
                 val = this_chrom_data.iloc[row_idx, col_idx]
-                x_pos = (row_pos + col_pos) / 2 + offset
-                # y_pos = np.sqrt(row_pos**2 + col_pos**2)
-                y_pos = (col_pos - row_pos) * 2 + offset
+                x_pos = (row_pos + col_pos) / 2 + ws
+                y_pos = (col_pos - row_pos)
             
                 # print(x_pos, y_pos)    
                 x_coords.append(x_pos)
                 y_coords.append(y_pos)
                 values.append(val)
         
-        ax.scatter(x_coords, y_coords, c=values, norm=self.norm, cmap=self.cmap, marker=self.marker, s=self.marker_size)
+        ax.scatter(x_coords, y_coords, c=values, norm=self.norm, cmap=self.cmap, marker=self.marker, linewidth=0,
+                   s=self.marker_size, alpha=self.alpha)
+        ax.set_ylim(0, max_y)
 
         # ToDo: Allow labeling either by ylabel or by ax.legend
         if self.label:

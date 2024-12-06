@@ -1,6 +1,7 @@
+import collections
 import os
 
-import numpy
+import numpy as np
 import pandas as pd
 import pysam
 from scipy.signal import convolve
@@ -78,8 +79,8 @@ class SparseVectors(_VectorDataSource):
     
     def _query(self, query_chrom, query_start, query_end):
         this_chrom_vector = self.data[query_chrom]
-        start_ipos = numpy.searchsorted(this_chrom_vector.keys(), query_start) - 1
-        end_ipos = numpy.searchsorted(this_chrom_vector.keys(), query_end) + 1
+        start_ipos = np.searchsorted(this_chrom_vector.keys(), query_start) - 1
+        end_ipos = np.searchsorted(this_chrom_vector.keys(), query_end) + 1
         
         return this_chrom_vector.iloc[start_ipos:end_ipos]
         
@@ -106,7 +107,7 @@ class TagDirectory(_VectorDataSource):
         # ToDo: Add argument validation to all functions and methods with string parameters
         # ToDo: Add verbosity-based logging output
         # ToDo; Compare performance with memory-mapped pandas DataFrames
-        query_result = pd.Series(numpy.zeros(query_end - query_start), index=numpy.arange(query_start, query_end))
+        query_result = pd.Series(np.zeros(query_end - query_start), index=np.arange(query_start, query_end))
 
         tag_filename = os.path.join(self.tag_directory_path, '{}.tags.tsv'.format(query_chrom))
         start_offset = utilities.binary_search_tag_file(tag_filename=tag_filename, search_target=query_start + 1)
